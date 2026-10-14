@@ -10,7 +10,8 @@
  * - Links from the popup end in #articleRow<id>: the offer is scrolled into
  *   view and highlighted (also when it appears later, after "Show more"), or
  *   — when it is not on the page — a notice offers the seller's stock and
- *   similar offers instead.
+ *   similar offers instead, and for an article that left the cart, to
+ *   ignore it (so it stops counting).
  */
 (function (root) {
   'use strict';
@@ -154,7 +155,7 @@
     if (highlight(articleId)) return;
     wanted = articleId;
     const fav = favorites[articleId];
-    if (!fav) return;
+    if (!fav) return savedNotOnPage(articleId);
     wantedNotice = true;
     CMCS.widget.showNotice({
       title: t('favNotOnPageTitle'),
@@ -163,6 +164,37 @@
         { label: t('favSellerOffers'), href: cm.sellerSearchUrl(fav) },
         { label: t('findAlternative'), href: cm.alternativesUrl(fav) },
       ].filter((link) => link.href),
+    });
+  }
+
+  /**
+   * A saved article that left the cart is not on its offer page: it may be
+   * sold (or further down the list). Offer similar offers, or to ignore it.
+   */
+  async function savedNotOnPage(articleId) {
+    const item = (await store.getItems())[articleId];
+    const gone = [store.STATUS.MISSING, store.STATUS.PARTIAL, store.STATUS.UNAVAILABLE];
+    if (!item || !gone.includes(item.status) || wanted !== articleId) return;
+    wantedNotice = true;
+    CMCS.widget.showNotice({
+      title: t('savedNotOnPageTitle'),
+      text: t('favNotOnPageLead', item.seller || '?'),
+      links: [{ label: t('findAlternative'), href: cm.alternativesUrl(item) }].filter((link) => link.href),
+      actions: [
+        {
+          label: t('detailIgnore'),
+          onClick: async () => {
+            wanted = null;
+            wantedNotice = false;
+            const before = await store.ignoreItems([articleId]);
+            CMCS.widget.showNotice({
+              title: 'Cart Saver',
+              text: t('ignoredOne', item.name),
+              actions: [{ label: t('undo'), onClick: () => store.restoreIgnored(before).then(() => CMCS.widget.showNotice(null)) }],
+            });
+          },
+        },
+      ],
     });
   }
 

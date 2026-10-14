@@ -129,10 +129,13 @@
     "message": "Naam;Uitbreiding;Nummer;Conditie;Taal;Extra;Aantal;Prijs;Verkoper;Status;URL"
   },
   "dataSummary": {
-    "message": "$1 opgeslagen: $2 in je mandje, $3 deels, $4 ontbreken, $5 niet beschikbaar. $6, $7."
+    "message": "$1 opgeslagen: $2 in je mandje, $3 deels, $4 ontbreken, $5 niet beschikbaar, $6 genegeerd. $7, $8."
   },
   "dataTitle": {
     "message": "Je opgeslagen artikelen, favorieten en lijsten"
+  },
+  "detailIgnore": {
+    "message": "Negeren"
   },
   "detailOpen": {
     "message": "Op Cardmarket"
@@ -269,6 +272,9 @@
   "groupUnavailable": {
     "message": "Niet meer beschikbaar ($1)"
   },
+  "hide": {
+    "message": "Verberg"
+  },
   "how1": {
     "message": "Leg artikelen zoals altijd in je winkelmandje op Cardmarket, uit elk spel. Cart Saver onthoudt ze vanzelf."
   },
@@ -286,6 +292,21 @@
   },
   "howTitle": {
     "message": "Zo werkt het"
+  },
+  "ignoreHint": {
+    "message": "Niet meer melden en niet meer terugzetten. Komt het weer in je mandje, dan telt het weer mee."
+  },
+  "ignoreSelected": {
+    "message": "Geselecteerde negeren ($1)"
+  },
+  "ignoredMany": {
+    "message": "$1 artikelen genegeerd."
+  },
+  "ignoredOne": {
+    "message": "“$1” genegeerd."
+  },
+  "ignoredOnlyLead": {
+    "message": "Wat je negeert telt niet mee. Je vindt het hieronder."
   },
   "importData": {
     "message": "Importeren"
@@ -408,10 +429,10 @@
     "message": "$1 van $2"
   },
   "prunedNote": {
-    "message": "$1 verkochte artikelen uit de lijst gehaald: een maand niet meer bekeken."
+    "message": "$1 artikelen uit de lijst gehaald: verkocht of genegeerd, en een maand niet meer bekeken."
   },
   "prunedNoteOne": {
-    "message": "1 verkocht artikel uit de lijst gehaald: een maand niet meer bekeken."
+    "message": "1 artikel uit de lijst gehaald: verkocht of genegeerd, en een maand niet meer bekeken."
   },
   "reasonEmptied": {
     "message": "Je hele mandje werd geleegd"
@@ -466,6 +487,9 @@
   },
   "refusedUnknownWith": {
     "message": "Cardmarket weigerde het: “$1”"
+  },
+  "reminderIgnore": {
+    "message": "Negeren"
   },
   "reminderLead": {
     "message": "$1 opgeslagen artikelen ($2) zitten niet meer in je winkelmandje."
@@ -526,6 +550,12 @@
   },
   "saveCartNow": {
     "message": "Mandje nu inlezen"
+  },
+  "savedNotOnPageTitle": {
+    "message": "Aanbieding niet gevonden"
+  },
+  "sectionIgnored": {
+    "message": "Genegeerd ($1)"
   },
   "sectionInCart": {
     "message": "$1 in je mandje"
@@ -614,6 +644,9 @@
   "shippingTracked": {
     "message": "boven 25 €: meestal verzending met tracking (duurder)"
   },
+  "show": {
+    "message": "Toon"
+  },
   "soldOnlyLead": {
     "message": "Die kunnen niet meer terug. Zoek een vervanging, of haal ze uit de lijst."
   },
@@ -622,6 +655,9 @@
   },
   "stampSold": {
     "message": "VERKOCHT"
+  },
+  "statusIgnored": {
+    "message": "Genegeerd"
   },
   "statusInCart": {
     "message": "In mandje"

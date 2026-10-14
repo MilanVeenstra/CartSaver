@@ -37,6 +37,11 @@
     PARTIAL: 'partial',
     MISSING: 'missing',
     UNAVAILABLE: 'unavailable',
+    /**
+     * Not in the cart, and you said to leave it (the offer is gone, you changed
+     * your mind): it no longer counts anywhere, until it shows up in the cart again.
+     */
+    IGNORED: 'ignored',
   };
 
   /** Why an article left the cart, as far as a comparison of two readings can tell. */
@@ -61,7 +66,7 @@
     priceTrend: false,
   };
 
-  /** Unavailable articles leave the list on their own after this long. */
+  /** Unavailable and ignored articles leave the list on their own after this long. */
   const UNAVAILABLE_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
 
   /**
@@ -146,6 +151,7 @@
         status: cartItem.amount < wantedAmount ? STATUS.PARTIAL : STATUS.IN_CART,
         missingSince: null,
         missingReason: null,
+        ignoredAt: null,
         lastAttempt: (prev && prev.lastAttempt) || null,
       };
     }
@@ -186,7 +192,7 @@
 
   /** Counts per status, optionally limited to one game. */
   function summarize(items, game) {
-    const summary = { total: 0, inCart: 0, partial: 0, missing: 0, unavailable: 0, attention: 0, missingValue: 0 };
+    const summary = { total: 0, inCart: 0, partial: 0, missing: 0, unavailable: 0, ignored: 0, attention: 0, missingValue: 0 };
     for (const item of Object.values(items || {})) {
       if (game && item.game !== game) continue;
       summary.total += 1;
@@ -196,6 +202,7 @@
         summary.partial += 1;
         summary.missingValue += (item.price || 0) * refillAmount(item);
       } else if (item.status === STATUS.UNAVAILABLE) summary.unavailable += 1;
+      else if (item.status === STATUS.IGNORED) summary.ignored += 1;
       else {
         summary.missing += 1;
         summary.missingValue += (item.price || 0) * refillAmount(item);
@@ -315,12 +322,17 @@
     return JSON.stringify(before) === JSON.stringify(after);
   }
 
-  /** Ids of unavailable articles nobody looked at for a month. */
+  /** Ids of unavailable and ignored articles nobody looked at for a month. */
   function staleIds(items, now = Date.now()) {
     return Object.values(items || {})
       .filter((item) => {
-        if (item.status !== STATUS.UNAVAILABLE) return false;
-        const last = Math.max((item.lastAttempt && item.lastAttempt.at) || 0, item.missingSince || 0, item.lastSeenInCartAt || 0);
+        if (item.status !== STATUS.UNAVAILABLE && item.status !== STATUS.IGNORED) return false;
+        const last = Math.max(
+          (item.lastAttempt && item.lastAttempt.at) || 0,
+          item.missingSince || 0,
+          item.lastSeenInCartAt || 0,
+          item.ignoredAt || 0,
+        );
         return last > 0 && now - last > UNAVAILABLE_KEEP_MS;
       })
       .map((item) => item.articleId);
@@ -503,6 +515,7 @@
             wantedAmount: (prev && prev.wantedAmount) || wanted,
             status: STATUS.MISSING,
             missingReason: null,
+            ignoredAt: null,
             viaFavorite: prev ? Boolean(prev.viaFavorite) : viaFavorite,
             firstSavedAt: (prev && prev.firstSavedAt) || now,
             missingSince: now,
@@ -540,6 +553,50 @@
     },
 
     hasUntriedFavorites: (items) => Object.values(items || {}).some((item) => item.viaFavorite && item.status === STATUS.MISSING && !item.lastAttempt),
+
+    /**
+     * Stop counting articles that are not (fully) in the cart: no badge, no
+     * reminder, not in "put back". What is gone becomes "ignored"; for an
+     * article partly in the cart, what is there now becomes what you want.
+     * Resolves to the articles as they were, for restoreIgnored() (undo).
+     */
+    async ignoreItems(articleIds, now = Date.now()) {
+      const ids = new Set(articleIds);
+      const before = [];
+      await update(KEYS.items, {}, (items) => {
+        const next = { ...items };
+        for (const id of ids) {
+          const item = items[id];
+          if (!item) continue;
+          if (item.status === STATUS.PARTIAL) {
+            next[id] = { ...item, status: STATUS.IN_CART, wantedAmount: item.amount || 1 };
+          } else if (item.status === STATUS.MISSING || item.status === STATUS.UNAVAILABLE) {
+            next[id] = { ...item, status: STATUS.IGNORED, ignoredAt: now };
+          } else continue;
+          before.push(item);
+        }
+        return before.length ? next : undefined;
+      });
+      return before;
+    },
+
+    /** Undo ignoreItems(), unless the article changed since (back in the cart, removed). */
+    restoreIgnored(list) {
+      return update(KEYS.items, {}, (items) => {
+        const next = { ...items };
+        let changed = false;
+        for (const item of list) {
+          const now = items[item.articleId];
+          if (!now) continue;
+          if (now.status === STATUS.IGNORED) next[item.articleId] = item;
+          else if (item.status === STATUS.PARTIAL && now.status === STATUS.IN_CART && (now.amount || 1) === (item.amount || 1)) {
+            next[item.articleId] = { ...now, status: STATUS.PARTIAL, wantedAmount: item.wantedAmount };
+          } else continue;
+          changed = true;
+        }
+        return changed ? next : undefined;
+      });
+    },
 
     /** Remove items and hand them back, so the removal can be undone. */
     async takeItems(articleIds) {

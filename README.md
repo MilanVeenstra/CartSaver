@@ -36,6 +36,7 @@ replacement.
 | **Remembered automatically** | Every article in your cart is saved, cards and sealed products alike (booster boxes, displays…): seller, condition, language, foil, price and quantity, with a picture. You do not have to do anything. |
 | **One click back** | One request per seller, and only what is really missing. So "1 of 2 in your cart" is topped up too. Use the checkboxes to choose what goes back. Changed your mind? *Undo*. |
 | **Know what happened** | For each article you see whether the cart was emptied, whether the seller disappeared or only this article was sold, and whether the price changed. |
+| **Ignore what is gone** | Offer gone, or you do not want it back? *Ignore* it: no more reminder or badge for it. It waits under *Ignored* (with *Undo*) and counts again as soon as it is back in your cart. |
 | **Replacements for sold cards** | The same card from the same seller, from a seller already in your cart (no extra shipping), or the cheapest similar offer. |
 | **All games in one cart** | Magic, Pokémon, Yu-Gi-Oh!, One Piece, Lorcana… You choose which games go back. |
 | **Favourites and lists** | Save an offer with a ☆, or your whole cart as a list ("Commander deck"), to put it back later with one click. |
@@ -55,7 +56,8 @@ the icon in the toolbar counts along.
 </p>
 
 **3. Put it back.** One click, and the cards are back in your cart. What
-was sold gets a stamp, with *Find a replacement*.
+was sold gets a stamp, with *Find a replacement*. An offer that is gone for
+good, or that you do not want back: *Ignore* stops the reminder for it.
 
 <p align="center">
   <img src="docs/screenshots/panel-result.png" width="380" alt="Result after putting back">

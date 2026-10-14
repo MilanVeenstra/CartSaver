@@ -30,7 +30,7 @@ Notation:
 | FR-02 | On every other Cardmarket page the extension compares the cart counter in the header with the previous time. If it has changed, it fetches the cart once and updates the list. | ✔ |
 | FR-03 | If the counter changes live, for example when you click "add to cart" on the site, the new article is saved within ~1.5 s, without you reloading the page. | ✔ |
 | FR-04 | Articles that appear twice on the page (desktop and mobile view) are saved once. | ✔ |
-| FR-05 | An article that disappears from the cart is **not** deleted. It gets the status *missing*, with the likely reason: the whole cart was emptied, everything from that seller disappeared, or only this article disappeared (probably sold). Possible statuses: *in cart*, *partly in cart*, *missing*, *unavailable*. | ✔ |
+| FR-05 | An article that disappears from the cart is **not** deleted. It gets the status *missing*, with the likely reason: the whole cart was emptied, everything from that seller disappeared, or only this article disappeared (probably sold). Possible statuses: *in cart*, *partly in cart*, *missing*, *unavailable*, *ignored*. | ✔ |
 | FR-06 | Articles you remove yourself are forgotten instead of being marked as missing. That applies to the bin icon, fewer copies, "everything from this seller" and "empty cart", and to articles you check out. Four signals, independent of each other: the site's remove request (also when it is encrypted in `args`), forms, the buttons, and on the cart page itself: rows that disappear or show fewer copies right after you clicked something. Only what is really out of the cart afterwards is forgotten. | ✔ |
 | FR-07 | Articles that appear on an order page (`/Orders/…`) have been bought and are taken off the list. | ✔ |
 | FR-08 | Automatic saving can be turned off. The cart page then shows the button *Save current cart*. | — |
@@ -50,6 +50,7 @@ Notation:
 | FR-14 | On the cart page a panel shows the missing articles, each with a checkbox, plus *select all/none* and the total value of the selection. | ✔ |
 | FR-15 | Unavailable articles are in a separate group. It shows Cardmarket's reason and the buttons *Find a similar offer*, *Try again anyway* and *Clear list*. | ✔ |
 | FR-16 | The panel can be collapsed to a small label. That choice is remembered. | — |
+| FR-16a | **Ignore** (1.6.2): an article that left the cart and should not come back (the offer is gone, or you changed your mind) can be ignored: per article (*Ignore* in the opened row, panel and popup), for the ticked articles (*Ignore selected (N)*), from the reminder (*Ignore*: everything it mentions), and from the "offer not found" message on the offer page. Ignored articles no longer count anywhere (badge, reminder, summary, *Put back*); they wait in a folded group *Ignored (N)* with *Put back* and ×, and come back by themselves when they are in the cart again. For an article partly in the cart, what is in the cart becomes the desired quantity. Always with *Undo*. | ✔ |
 
 ### A3. Putting articles back in the cart
 
@@ -93,7 +94,7 @@ Notation:
 
 | ID | Requirement | Test |
 |---|---|---|
-| FR-40 | The *Cart* tab in the popup (design 1.5): at the top the summary ("5 articles can go back · 9,79 € from 3 sellers · your whole cart was emptied"), below it a calm list per seller with a subtotal (collapsible to one line with card thumbnails), a section *No longer available* with the stamp SOLD, and "4 in your cart" with those articles below it (always expanded since 1.6.1). Each row shows the name, one meta line and one short extra line (red only for a warning); a click expands it with all details and the buttons *Only this one back*, *On Cardmarket*, ☆ and ×. At the bottom the black button "Put 5 back in your cart · 9,79 €". | ✔ |
+| FR-40 | The *Cart* tab in the popup (design 1.5): at the top the summary ("5 articles can go back · 9,79 € from 3 sellers · your whole cart was emptied"), below it a calm list per seller with a subtotal (collapsible to one line with card thumbnails), a section *No longer available* with the stamp SOLD, and "4 in your cart" with those articles below it (always expanded since 1.6.1). Each row shows the name, one meta line and one short extra line (red only for a warning); a click expands it with all details and the buttons *Only this one back*, *On Cardmarket*, *Ignore*, ☆ and ×. At the bottom the black button "Put 5 back in your cart · 9,79 €". | ✔ |
 | FR-41 | If you have articles from several games, there is a game choice. | — |
 | FR-42 | Settings: automatic saving on/off, reminder on/off, pause between articles (0.5–10 s). | ✔ |
 | FR-43 | Export to JSON (articles and favourites). On import, new articles are added without overwriting existing ones. *Delete everything* asks for confirmation first. | — |
@@ -105,7 +106,7 @@ Notation:
 | FR-47 | **Shipping per seller** (panel on the cart page, collapsible): per seller the number of cards, the value, the shipping costs and their share, "shipping costs more than the articles", and the 25 € threshold for tracked shipping. | ✔ (reading shipping costs on the live site still to be confirmed) |
 | FR-48 | **Price versus trend** (configurable, off by default): the public price guide once a day; only the saved cards are kept (foil separately). An offer at least 15% and 0,10 € above the trend gets a note; one well below it does too. | ✔ |
 | FR-49 | **Checking while you are away** (configurable, off by default): with a Cardmarket tab open and you at the computer, one tab reads the cart at most every 10 minutes. | ✔ |
-| FR-50 | Articles that have been *unavailable* for a month disappear from the list by themselves. | ✔ |
+| FR-50 | Articles that have been *unavailable* or *ignored* for a month disappear from the list by themselves. | ✔ |
 | FR-44 | The interface is in Dutch or English, depending on the browser language, and supports a light and a dark mode. | ✔ (NL) |
 
 ### A6. Non-functional

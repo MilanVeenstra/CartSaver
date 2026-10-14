@@ -34,6 +34,8 @@
   let replacing = null;
   /** "Save as list…": the name field while open. */
   let listForm = null;
+  /** The "Ignored" list is folded until you open it. */
+  let showIgnored = false;
   /** A short message in a strip at the bottom of the panel, optionally with one action (undo). */
   let strip = null;
   let stripTimer = null;
@@ -242,6 +244,28 @@
     });
   }
 
+  /** What "Ignored" in the strip can still bring back: ignoring in a row adds up. */
+  let lastIgnore = null;
+
+  /** Stop counting articles (the offer is gone, or you do not want it back), with a way back. */
+  async function ignoreItems(ids) {
+    const before = await store.ignoreItems(ids);
+    if (!before.length) return;
+    ids.forEach((id) => deselected.delete(id));
+    if (ids.includes(openId)) openId = null;
+    const recent = lastIgnore && strip && strip.action && Date.now() - lastIgnore.at < 8000 ? lastIgnore.before : [];
+    const all = [...recent, ...before];
+    lastIgnore = { before: all, at: Date.now() };
+    showStrip(all.length === 1 ? t('ignoredOne', all[0].name) : t('ignoredMany', String(all.length)), {
+      label: t('undo'),
+      onClick: async () => {
+        lastIgnore = null;
+        strip = null;
+        await store.restoreIgnored(all);
+      },
+    });
+  }
+
   /** ☆ in an opened row, as in the popup. */
   function starButton(article) {
     const on = Boolean(state.favorites[article.articleId]);
@@ -310,7 +334,7 @@
 
   /** Save the list (everything that can still go back, every game) under a name. */
   async function saveList(name) {
-    const list = Object.values(state.items).filter((item) => item.status !== store.STATUS.UNAVAILABLE);
+    const list = Object.values(state.items).filter((item) => item.status !== store.STATUS.UNAVAILABLE && item.status !== store.STATUS.IGNORED);
     listForm = null;
     if (!list.length) return showStrip(t('cartsNothing'));
     const saved = await store.saveCart(name, list);
@@ -613,7 +637,7 @@
     ];
   };
 
-  function cartView(missing, unavailable, inCart) {
+  function cartView(missing, unavailable, inCart, ignored) {
     if (state.meta.collapsed) {
       const attention = missing.length + unavailable.length;
       return h(
@@ -625,7 +649,7 @@
     }
 
     const selected = missing.filter((item) => !deselected.has(item.articleId));
-    const multiGame = new Set([...missing, ...unavailable].map((item) => item.game)).size > 1;
+    const multiGame = new Set([...missing, ...unavailable, ...ignored].map((item) => item.game)).size > 1;
     const sellers = (list) => new Set(list.map((item) => item.seller || '—')).size;
 
     // The big picture first.
@@ -650,7 +674,7 @@
           expiryLine(),
         ),
       );
-    } else if (!inCart.length && !unavailable.length) {
+    } else if (!inCart.length && !unavailable.length && !ignored.length) {
       // Nothing saved yet (or a cleared list): say how it works.
       body.push(
         h(
@@ -672,7 +696,7 @@
           expiryLine(),
         ),
       );
-    } else {
+    } else if (unavailable.length) {
       // Only sold articles are left.
       body.push(
         h(
@@ -680,6 +704,16 @@
           { class: 'cmcs-summary' },
           h('h2', { class: 'cmcs-summary-title' }, t('soldOnlyTitle')),
           h('p', { class: 'cmcs-summary-sub' }, t('soldOnlyLead')),
+        ),
+      );
+    } else {
+      // Only what you said to ignore is left.
+      body.push(
+        h(
+          'div',
+          { class: 'cmcs-summary' },
+          h('h2', { class: 'cmcs-summary-title' }, t('nothingToRefill')),
+          h('p', { class: 'cmcs-summary-sub' }, t('ignoredOnlyLead')),
         ),
       );
     }
@@ -706,6 +740,7 @@
           details: [
             ui.detailButton(t('detailRefillOne'), () => refill([item.articleId]), { strong: true }),
             ui.detailButton(t('detailOpen'), null, { href: cm.offerUrl(item) || item.productUrl }),
+            ui.detailButton(t('detailIgnore'), () => ignoreItems([item.articleId]), { title: t('ignoreHint') }),
             cm.alternativesUrl(item)
               ? h('a', { class: 'cmcs-detail-btn', href: cm.alternativesUrl(item), title: t('findAlternative'), 'aria-label': t('findAlternative') }, ui.icon('search'))
               : null,
@@ -738,6 +773,17 @@
         ),
         gameChips(missing),
         h('div', { class: 'cmcs-list' }, [...groups.entries()].map(([seller, list]) => sellerGroup(seller, list, row))),
+        selected.length
+          ? h(
+              'div',
+              { class: 'cmcs-links' },
+              h(
+                'button',
+                { type: 'button', class: 'cmcs-link', title: t('ignoreHint'), onclick: () => ignoreItems(selected.map((item) => item.articleId)) },
+                t('ignoreSelected', String(store.copiesToReturn(selected))),
+              ),
+            )
+          : null,
       );
     }
 
@@ -755,6 +801,44 @@
           { class: 'cmcs-links' },
           h('button', { type: 'button', class: 'cmcs-link', onclick: () => refill(unavailable.map((item) => item.articleId)) }, t('retryUnavailable')),
         ),
+      );
+    }
+
+    if (ignored.length) {
+      body.push(
+        h(
+          'div',
+          { class: 'cmcs-fold-line' },
+          h('span', null, t('sectionIgnored', String(ignored.length))),
+          h(
+            'button',
+            { type: 'button', class: 'cmcs-link', 'aria-expanded': String(showIgnored), onclick: () => { showIgnored = !showIgnored; render(); } },
+            showIgnored ? t('hide') : t('show'),
+          ),
+        ),
+        showIgnored
+          ? [
+              h(
+                'div',
+                { class: 'cmcs-list' },
+                ignored.map((item) =>
+                  ui.itemRow(item, {
+                    withGame: multiGame,
+                    href: cm.offerUrl(item) || item.productUrl,
+                    actions: [
+                      ui.iconButton(t('refillOne'), 'refresh', () => refill([item.articleId])),
+                      ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item.articleId])),
+                    ],
+                  }),
+                ),
+              ),
+              h(
+                'div',
+                { class: 'cmcs-links' },
+                h('button', { type: 'button', class: 'cmcs-link', onclick: () => removeItems(ignored.map((item) => item.articleId)) }, t('clearUnavailable')),
+              ),
+            ]
+          : null,
       );
     }
 
@@ -932,7 +1016,12 @@
       },
       h('p', { class: 'cmcs-lead cmcs-muted' }, CMCS.tn('reminderLead', store.copiesToReturn(missing), store.copiesToReturn(missing), store.formatPrice(value))),
       onlyGameButtons(missing),
-      h('div', { class: 'cmcs-links' }, h('a', { class: 'cmcs-link', href: cm.cartUrl(loc.lang, loc.game) }, t('viewInCart'))),
+      h(
+        'div',
+        { class: 'cmcs-links' },
+        h('a', { class: 'cmcs-link', href: cm.cartUrl(loc.lang, loc.game) }, t('viewInCart')),
+        h('button', { type: 'button', class: 'cmcs-link', title: t('ignoreHint'), onclick: () => ignoreItems(missing.map((item) => item.articleId)) }, t('reminderIgnore')),
+      ),
     );
   }
 
@@ -975,10 +1064,12 @@
     const missing = forGame.filter((item) => item.status === STATUS.MISSING || item.status === STATUS.PARTIAL);
     const unavailable = forGame.filter((item) => item.status === STATUS.UNAVAILABLE);
     const inCart = forGame.filter((item) => item.status === STATUS.IN_CART || item.status === STATUS.PARTIAL);
+    const ignored = forGame.filter((item) => item.status === STATUS.IGNORED);
     const otherAccount = meta.account && meta.accountMismatch && cm.readUsername(document) === meta.accountMismatch;
 
     missing.sort(bySellerName);
     unavailable.sort(bySellerName);
+    ignored.sort(bySellerName);
 
     let view = null;
     let name = null;
@@ -993,7 +1084,7 @@
     } else if (otherAccount) {
       [view, name] = [accountView(meta.account, meta.accountMismatch), 'account'];
     } else if (loc.isCart && (forGame.length || (state.carts || []).length || !settings.autoTrack)) {
-      [view, name] = [cartView(missing, unavailable, inCart), 'cart'];
+      [view, name] = [cartView(missing, unavailable, inCart, ignored), 'cart'];
     } else if (
       !loc.isCart &&
       missing.length &&

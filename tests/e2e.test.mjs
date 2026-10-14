@@ -1715,6 +1715,136 @@ describe('Cardmarket Cart Saver', () => {
     });
   });
 
+  describe('ignoring what is gone', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const openPopup = async () => {
+      const popup = await context.newPage();
+      await popup.setViewportSize({ width: 400, height: 600 });
+      await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+      await popup.locator('#tab-cart').click(); // the popup remembers the last tab
+      return popup;
+    };
+    const badge = () => sw.evaluate(() => chrome.action.getBadgeText({}));
+
+    before(async () => {
+      // Three articles in the cart; then one copy of the Bog, the Mage and the Ephemerate leave it.
+      for (const id of [BOG, MAGE, EPHEMERATE]) mock.state.available.set(id, mock.article(id));
+      mock.state.cart = new Map([[BOG, 2], [MAGE, 1], [EPHEMERATE, 1]]);
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.job': null, 'cmcs.meta': {}, 'cmcs.items': {}, 'cmcs.favorites': {} }));
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      await waitFor(async () => (await items())[EPHEMERATE]?.status === 'in_cart', 'saved');
+      mock.state.cart = new Map([[BOG, 1]]);
+      await page.goto(`${CM}/en/Magic`);
+      await waitFor(async () => {
+        const all = await items();
+        return all[BOG]?.status === 'partial' && all[MAGE]?.status === 'missing' && all[EPHEMERATE]?.status === 'missing';
+      }, 'partly gone');
+    });
+
+    it('ignores everything from the reminder: no badge, no reminder, and it can be undone', async () => {
+      await waitFor(async () => /Je winkelmandje is geleegd/.test(await widget(page).innerText()), 'reminder');
+      await waitFor(async () => (await badge()) === '3', 'badge 3');
+      await widget(page).getByRole('button', { name: 'Negeren', exact: true }).click();
+
+      const all = await waitFor(async () => {
+        const now = await items();
+        return now[MAGE].status === 'ignored' && now[EPHEMERATE].status === 'ignored' && now;
+      }, 'ignored');
+      assert.equal(all[BOG].status, 'in_cart', 'what is in the cart is what you want now');
+      assert.equal(all[BOG].wantedAmount, 1);
+      await waitFor(async () => (await badge()) === '', 'no badge');
+      await waitFor(async () => /3 artikelen genegeerd/.test(await widget(page).locator('.cmcs-strip').innerText()), 'strip');
+      await shot(widget(page), '20-ignored-strip');
+
+      await widget(page).locator('.cmcs-strip').getByRole('button', { name: 'Ongedaan maken' }).click();
+      const back = await waitFor(async () => {
+        const now = await items();
+        return now[MAGE].status === 'missing' && now[EPHEMERATE].status === 'missing' && now[BOG].status === 'partial' && now;
+      }, 'undone');
+      assert.equal(back[BOG].wantedAmount, 2);
+      await waitFor(async () => (await badge()) === '3', 'badge back');
+      await waitFor(async () => /Je winkelmandje is geleegd/.test(await widget(page).innerText()), 'reminder back');
+    });
+
+    it('ignores one article in the panel, keeps it under "Ignored", and counts it again once it is back in the cart', async () => {
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      const panel = widget(page);
+      await waitFor(() => panel.locator(`.cmcs-item[data-article-id="${MAGE}"]`).isVisible(), 'the Mage in the panel');
+      await panel.locator(`.cmcs-item[data-article-id="${MAGE}"] .cmcs-item-line`).click();
+      await shot(panel, '21-row-with-ignore');
+      await panel.locator(`.cmcs-item[data-article-id="${MAGE}"]`).getByRole('button', { name: 'Negeren', exact: true }).click();
+      await waitFor(async () => (await items())[MAGE].status === 'ignored', 'ignored');
+      await waitFor(async () => (await badge()) === '2', 'badge without it');
+      assert.match(await panel.locator('.cmcs-fold-line').innerText(), /Genegeerd \(1\)/);
+      assert.equal(await panel.locator(`.cmcs-item[data-article-id="${MAGE}"]`).count(), 0, 'folded away');
+      await panel.locator('.cmcs-fold-line').getByRole('button', { name: 'Toon' }).click();
+      await waitFor(() => panel.locator(`.cmcs-item--ignored[data-article-id="${MAGE}"]`).isVisible(), 'listed under Ignored');
+      await shot(panel, '22-ignored-section');
+
+      // Reading the cart again leaves it alone…
+      await page.reload();
+      await waitFor(() => widget(page).isVisible(), 'panel');
+      assert.equal((await items())[MAGE].status, 'ignored');
+      // …until it is in the cart again.
+      mock.state.cart.set(MAGE, 1);
+      await page.reload();
+      const mage = await waitFor(async () => (await items())[MAGE]?.status === 'in_cart' && (await items())[MAGE], 'back in the cart');
+      assert.equal(mage.ignoredAt, null);
+    });
+
+    it('ignores the ticked articles from the popup, one undo for several', async () => {
+      const popup = await openPopup();
+      await popup.getByRole('checkbox', { name: 'Bojuka Bog' }).uncheck();
+      await popup.getByRole('button', { name: 'Geselecteerde negeren (1)' }).click();
+      await waitFor(async () => (await items())[EPHEMERATE].status === 'ignored', 'the ticked one ignored');
+      assert.equal((await items())[BOG].status, 'partial', 'the unticked one stays');
+      await waitFor(async () => /“Ephemerate” genegeerd\./.test(await popup.locator('#toast').innerText()), 'toast');
+      assert.match(await popup.locator('#list .cmcs-fold-line').innerText(), /Genegeerd \(1\)/);
+
+      // The Bog is listed twice: the copy that can go back, and the one in the cart.
+      const bog = popup.locator(`#list .cmcs-item--partial[data-article-id="${BOG}"]`);
+      await bog.locator('.cmcs-item-line').click();
+      await shot(popup, '23-popup-row-with-ignore');
+      await bog.getByRole('button', { name: 'Negeren', exact: true }).click();
+      await waitFor(async () => (await items())[BOG].status === 'in_cart', 'the Bog: what is in the cart is enough');
+      await waitFor(async () => /2 artikelen genegeerd\./.test(await popup.locator('#toast').innerText()), 'counted together');
+      await waitFor(async () => (await badge()) === '', 'nothing left to put back');
+      await shot(popup, '24-popup-ignored');
+
+      await popup.locator('#toast').getByRole('button', { name: 'Ongedaan maken' }).click();
+      await waitFor(async () => {
+        const now = await items();
+        return now[BOG].status === 'partial' && now[BOG].wantedAmount === 2 && now[EPHEMERATE].status === 'missing';
+      }, 'both undone');
+      await popup.close();
+    });
+
+    it('offers to ignore a saved offer that is not on its page any more', async (t) => {
+      t.after(() => mock.state.available.set(EPHEMERATE, mock.article(EPHEMERATE)));
+      mock.state.available.delete(EPHEMERATE);
+      await page.goto(`${CM}/en/Magic/Products/Singles/Modern-Horizons/Ephemerate#articleRow${EPHEMERATE}`);
+      await waitFor(async () => /Aanbieding niet gevonden/.test(await widget(page).innerText()), 'notice');
+      await shot(widget(page), '25-offer-not-found');
+      await widget(page).getByRole('button', { name: 'Negeren', exact: true }).click();
+      await waitFor(async () => (await items())[EPHEMERATE].status === 'ignored', 'ignored');
+      await waitFor(async () => /“Ephemerate” genegeerd\./.test(await widget(page).innerText()), 'said so');
+      await widget(page).getByRole('button', { name: 'Ongedaan maken' }).click();
+      await waitFor(async () => (await items())[EPHEMERATE].status === 'missing', 'undone');
+    });
+
+    it('forgets ignored articles after a month', async () => {
+      const long = Date.now() - 40 * DAY;
+      await patchItems({
+        [EPHEMERATE]: { status: 'ignored', ignoredAt: long, missingSince: long, lastSeenInCartAt: long, lastAttempt: null },
+        [MAGE]: { status: 'ignored', ignoredAt: Date.now() - 2 * DAY },
+      });
+      assert.equal(await sw.evaluate(() => self.cmcs.pruneStale()), 1);
+      const all = await items();
+      assert.equal(all[EPHEMERATE], undefined);
+      assert.ok(all[MAGE], 'recently ignored ones stay');
+    });
+  });
+
   describe('a calm panel', () => {
     const FAKE = Array.from({ length: 14 }, (_, i) => String(9000000001 + i));
     const fake = (id, i) => ({
@@ -1782,7 +1912,7 @@ describe('Cardmarket Cart Saver', () => {
     await options.goto(`chrome-extension://${extensionId}/src/options/options.html`);
     await waitFor(async () => /opgeslagen: \d+ in je mandje, \d+ deels, \d+ ontbreken/.test(await options.locator('#dataSummary').innerText()), 'data summary');
     // Every article is counted once: the parts add up to the total.
-    const [total, ...parts] = (await options.locator('#dataSummary').innerText()).match(/\d+/g).slice(0, 5).map(Number);
+    const [total, ...parts] = (await options.locator('#dataSummary').innerText()).match(/\d+/g).slice(0, 6).map(Number);
     assert.equal(parts.reduce((a, b) => a + b, 0), total);
     await options.fill('#delay', '2.5');
     await options.locator('#delay').dispatchEvent('change');

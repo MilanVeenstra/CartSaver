@@ -129,10 +129,13 @@
     "message": "Name;Expansion;Number;Condition;Language;Extras;Amount;Price;Seller;Status;URL"
   },
   "dataSummary": {
-    "message": "$1 saved: $2 in your cart, $3 partly, $4 missing, $5 unavailable. $6, $7."
+    "message": "$1 saved: $2 in your cart, $3 partly, $4 missing, $5 unavailable, $6 ignored. $7, $8."
   },
   "dataTitle": {
     "message": "Your saved articles, favourites and lists"
+  },
+  "detailIgnore": {
+    "message": "Ignore"
   },
   "detailOpen": {
     "message": "On Cardmarket"
@@ -269,6 +272,9 @@
   "groupUnavailable": {
     "message": "No longer available ($1)"
   },
+  "hide": {
+    "message": "Hide"
+  },
   "how1": {
     "message": "Put articles in your Cardmarket cart as usual, from any game. Cart Saver remembers them by itself."
   },
@@ -286,6 +292,21 @@
   },
   "howTitle": {
     "message": "How it works"
+  },
+  "ignoreHint": {
+    "message": "Stop reminding me and do not put it back. If it shows up in your cart again, it counts again."
+  },
+  "ignoreSelected": {
+    "message": "Ignore selected ($1)"
+  },
+  "ignoredMany": {
+    "message": "$1 articles ignored."
+  },
+  "ignoredOne": {
+    "message": "“$1” ignored."
+  },
+  "ignoredOnlyLead": {
+    "message": "What you ignore does not count. You will find it below."
   },
   "importData": {
     "message": "Import"
@@ -408,10 +429,10 @@
     "message": "$1 of $2"
   },
   "prunedNote": {
-    "message": "$1 sold articles left the list: not looked at for a month."
+    "message": "$1 articles left the list: sold or ignored, and not looked at for a month."
   },
   "prunedNoteOne": {
-    "message": "1 sold article left the list: not looked at for a month."
+    "message": "1 article left the list: sold or ignored, and not looked at for a month."
   },
   "reasonEmptied": {
     "message": "Your whole cart was emptied"
@@ -466,6 +487,9 @@
   },
   "refusedUnknownWith": {
     "message": "Cardmarket refused it: “$1”"
+  },
+  "reminderIgnore": {
+    "message": "Ignore"
   },
   "reminderLead": {
     "message": "$1 saved articles ($2) are no longer in your cart."
@@ -526,6 +550,12 @@
   },
   "saveCartNow": {
     "message": "Read the cart now"
+  },
+  "savedNotOnPageTitle": {
+    "message": "Offer not found"
+  },
+  "sectionIgnored": {
+    "message": "Ignored ($1)"
   },
   "sectionInCart": {
     "message": "$1 in your cart"
@@ -614,6 +644,9 @@
   "shippingTracked": {
     "message": "over 25 €: usually tracked shipping (dearer)"
   },
+  "show": {
+    "message": "Show"
+  },
   "soldOnlyLead": {
     "message": "They cannot go back. Find a replacement, or take them off the list."
   },
@@ -622,6 +655,9 @@
   },
   "stampSold": {
     "message": "SOLD"
+  },
+  "statusIgnored": {
+    "message": "Ignored"
   },
   "statusInCart": {
     "message": "In cart"

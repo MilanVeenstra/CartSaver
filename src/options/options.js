@@ -61,7 +61,7 @@
   async function renderSummary() {
     const [items, favorites, carts] = await Promise.all([store.getItems(), store.getFavorites(), store.getCarts()]);
     const summary = store.summarize(items);
-    // Every article counted once: fully in the cart, partly, missing, or sold.
+    // Every article counted once: fully in the cart, partly, missing, sold, or ignored.
     $('dataSummary').textContent = t(
       'dataSummary',
       String(summary.total),
@@ -69,6 +69,7 @@
       String(summary.partial),
       String(summary.missing),
       String(summary.unavailable),
+      String(summary.ignored),
       CMCS.tn('countFavorites', Object.keys(favorites).length, Object.keys(favorites).length),
       CMCS.tn('countLists', carts.length, carts.length),
     );
@@ -137,7 +138,8 @@
         const next = { ...items };
         for (const item of validItems) {
           if (next[item.articleId]) continue;
-          next[item.articleId] = { ...item, status: item.status === store.STATUS.UNAVAILABLE ? item.status : store.STATUS.MISSING };
+          const keep = item.status === store.STATUS.UNAVAILABLE || item.status === store.STATUS.IGNORED;
+          next[item.articleId] = { ...item, status: keep ? item.status : store.STATUS.MISSING };
           added += 1;
         }
         return next;

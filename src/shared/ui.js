@@ -298,11 +298,11 @@
   }
 
   /** A text button for the opened row ("Only this one back", "On Cardmarket"). */
-  function detailButton(label, onClick, { strong = false, href = null } = {}) {
+  function detailButton(label, onClick, { strong = false, href = null, title = null } = {}) {
     const cls = `cmcs-detail-btn ${strong ? 'cmcs-detail-btn--strong' : ''}`;
     return href
-      ? h('a', { class: cls, href, target: '_blank', rel: 'noopener' }, label)
-      : h('button', { type: 'button', class: cls, onclick: onClick }, label);
+      ? h('a', { class: cls, href, target: '_blank', rel: 'noopener', title }, label)
+      : h('button', { type: 'button', class: cls, title, onclick: onClick }, label);
   }
 
   const ERROR_KEYS = {
@@ -497,6 +497,8 @@
     .cmcs-item-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cmcs-text); text-decoration: none; }
     a.cmcs-item-name:hover { text-decoration: underline; }
     .cmcs-item--sold .cmcs-item-name { color: var(--cmcs-disabled); }
+    .cmcs-item--ignored .cmcs-item-name, .cmcs-item--ignored .cmcs-price { color: var(--cmcs-muted); }
+    .cmcs-item--ignored .cmcs-thumb { opacity: 0.55; }
     .cmcs-item-meta { font-size: 12px; color: var(--cmcs-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cmcs-wrap { white-space: normal; }
     .cmcs-item-note { font-size: 12px; color: var(--cmcs-muted); }
@@ -533,6 +535,7 @@
     .cmcs-chip[aria-pressed="true"]::before { content: "✓ "; }
     .cmcs-chip[aria-pressed="false"] { color: var(--cmcs-disabled); text-decoration: line-through; }
     .cmcs-section-title { font-size: 12px; color: var(--cmcs-muted); margin: 14px 0 4px; font-weight: 400; }
+    .cmcs-fold-line { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: var(--cmcs-muted); margin: 14px 0 4px; }
     .cmcs-seller {
       appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; width: 100%;
       display: flex; align-items: center; gap: 10px; padding: 12px 0 4px; font-size: 12px; text-align: left;

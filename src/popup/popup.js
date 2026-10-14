@@ -43,6 +43,8 @@
   /** Sellers folded into one line, and the opened row. */
   const closedSellers = new Set();
   let openId = null;
+  /** The "Ignored" list is folded until you open it. */
+  let showIgnored = false;
   let notice = null;
   let query = '';
   /** The saved list that is unfolded, and the one being renamed. */
@@ -90,7 +92,7 @@
     query = event.target.value;
     renderFavorites();
   });
-  const STATUS_KEYS = { in_cart: 'statusInCart', partial: 'statusPartial', missing: 'statusMissing', unavailable: 'statusUnavailable' };
+  const STATUS_KEYS = { in_cart: 'statusInCart', partial: 'statusPartial', missing: 'statusMissing', unavailable: 'statusUnavailable', ignored: 'statusIgnored' };
   const exportOptions = {
     header: t('csvHeader').split(';'),
     statusName: (status) => (STATUS_KEYS[status] ? t(STATUS_KEYS[status]) : ''),
@@ -101,7 +103,7 @@
     download(`cart-saver-${game === ALL ? 'all' : game || 'list'}.csv`, store.exportCsv(currentList(), exportOptions), 'text/csv'),
   );
   // "Save as list…": what the Cart tab shows (the game picked included), under a name.
-  const listToSave = () => currentList().filter((item) => item.status !== STATUS.UNAVAILABLE);
+  const listToSave = () => currentList().filter((item) => item.status !== STATUS.UNAVAILABLE && item.status !== STATUS.IGNORED);
   $('save-list').addEventListener('click', () => {
     const list = listToSave();
     if (!list.length) return showToast(t('cartsNothing'));
@@ -251,6 +253,27 @@
       onClick: () => {
         lastRemoval = null;
         return store.restoreItems(all);
+      },
+    });
+  }
+
+  /** Ignoring right after each other shares one undo, like removing. */
+  let lastIgnore = null;
+
+  /** Stop counting articles (the offer is gone, or you do not want it back), with a way back. */
+  async function ignoreItems(list) {
+    const before = await store.ignoreItems(list.map((item) => item.articleId));
+    if (!before.length) return;
+    list.forEach((item) => deselected.delete(item.articleId));
+    if (list.some((item) => item.articleId === openId)) openId = null;
+    const recent = lastIgnore && !$('toast').hidden && Date.now() - lastIgnore.at < 8000 ? lastIgnore.before : [];
+    const all = [...recent, ...before];
+    lastIgnore = { before: all, at: Date.now() };
+    showToast(all.length === 1 ? t('ignoredOne', all[0].name) : t('ignoredMany', String(all.length)), {
+      label: t('undo'),
+      onClick: () => {
+        lastIgnore = null;
+        return store.restoreIgnored(all);
       },
     });
   }
@@ -586,6 +609,7 @@
     // What goes back: everything still ticked (as in the panel on Cardmarket).
     const toRefill = candidates.filter((item) => !deselected.has(item.articleId));
     const unavailable = forGame.filter((item) => item.status === STATUS.UNAVAILABLE);
+    const ignored = forGame.filter((item) => item.status === STATUS.IGNORED);
     // In the cart: everything that is there, also when more copies of it could go back.
     const inCart = forGame.filter(inCartStatus);
     const busy = store.isJobActive(job);
@@ -674,10 +698,21 @@
         details: [
           ui.detailButton(t('detailRefillOne'), () => refill([item]), { strong: true }),
           ui.detailButton(t('detailOpen'), null, { href: cm.offerUrl(item) || item.productUrl }),
+          ui.detailButton(t('detailIgnore'), () => ignoreItems([item]), { title: t('ignoreHint') }),
           cm.alternativesUrl(item) ? h('a', { class: 'cmcs-detail-btn', href: cm.alternativesUrl(item), target: '_blank', rel: 'noopener', title: t('findAlternative'), 'aria-label': t('findAlternative') }, ui.icon('search')) : null,
           starButton(item, true),
           detailIcon(t('removeFromSaved'), 'close', () => removeItems([item])),
         ].filter(Boolean),
+      });
+    // Ignored: grey, out of every count; put back after all, or off the list.
+    const ignoredRow = (item) =>
+      ui.itemRow(item, {
+        withGame: multiGame,
+        href: cm.offerUrl(item) || item.productUrl,
+        actions: [
+          ui.iconButton(t('refillOne'), 'refresh', () => refill([item])),
+          ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item])),
+        ],
       });
     // Shown with the copies that are in the cart (a partly-there article also waits above).
     const inCartRow = (item) =>
@@ -742,6 +777,15 @@
       );
     }
     list.push(groupBySeller(candidates, missingRow));
+    if (toRefill.length) {
+      list.push(
+        h(
+          'div',
+          { class: 'section-actions' },
+          h('button', { type: 'button', class: 'cmcs-link', title: t('ignoreHint'), onclick: () => ignoreItems(toRefill) }, t('ignoreSelected', String(store.copiesToReturn(toRefill)))),
+        ),
+      );
+    }
     if (unavailable.length) {
       list.push(
         h('div', { class: 'cmcs-section-title' }, t('sectionUnavailable')),
@@ -758,6 +802,30 @@
       list.push(
         h('div', { class: 'cmcs-section-title' }, t('sectionInCart', store.copiesInCart(inCart))),
         groupBySeller(inCart.map((item) => ({ ...item, status: STATUS.IN_CART })), inCartRow),
+      );
+    }
+    if (ignored.length) {
+      list.push(
+        h(
+          'div',
+          { class: 'cmcs-fold-line' },
+          h('span', null, t('sectionIgnored', String(ignored.length))),
+          h(
+            'button',
+            { type: 'button', class: 'cmcs-link', 'aria-expanded': String(showIgnored), onclick: () => { showIgnored = !showIgnored; render(); } },
+            showIgnored ? t('hide') : t('show'),
+          ),
+        ),
+        showIgnored
+          ? [
+              [...ignored].sort(bySellerName).map(ignoredRow),
+              h(
+                'div',
+                { class: 'section-actions' },
+                h('button', { type: 'button', class: 'cmcs-link', onclick: () => removeItems(ignored) }, t('clearUnavailable')),
+              ),
+            ]
+          : null,
       );
     }
     $('list').replaceChildren(...list.flat(Infinity).filter(Boolean));

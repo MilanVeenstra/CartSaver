@@ -11,7 +11,7 @@
  *    or Cardmarket is about to empty it (5 minutes before the time it shows).
  * 4. Optional: asks an open Cardmarket tab to look at the cart every 10
  *    minutes while you are at the computer.
- * 5. Once a day: forgets unavailable articles older than a month, and
+ * 5. Once a day: forgets unavailable and ignored articles older than a month, and
  *    (optional) reads Cardmarket's public price guide for the saved cards.
  * 6. Product pictures for the popup (see images.js).
  */
