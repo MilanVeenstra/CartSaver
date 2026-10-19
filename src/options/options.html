@@ -83,6 +83,23 @@
       </section>
 
       <section class="card">
+        <h2 data-i18n="syncTitle"></h2>
+        <div class="row row--block">
+          <label class="row-check">
+            <input type="checkbox" id="cloudSync" />
+            <span>
+              <strong data-i18n="settingSync"></strong>
+              <span class="cmcs-muted" data-i18n="settingSyncHelp"></span>
+            </span>
+          </label>
+          <div class="psa-key" id="syncBox">
+            <span class="cmcs-muted sync-status" id="syncStatus" aria-live="polite"></span>
+            <button type="button" class="cmcs-btn cmcs-btn--small cmcs-btn--ghost" id="syncNow" data-i18n="syncNow"></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
         <h2 data-i18n="dataTitle"></h2>
         <p id="dataSummary" class="cmcs-muted"></p>
         <div class="buttons">

@@ -68,8 +68,10 @@
     priceTrend: false,
     /** Show an estimated PSA value for Pokémon cards (needs a PokemonPriceTracker API key). */
     psaEstimate: false,
-    /** Your own PokemonPriceTracker API key; it never leaves this browser except to that API. */
+    /** Your own PokemonPriceTracker API key; it never leaves this browser except to that API (and your own browser sync). */
     pptApiKey: '',
+    /** Keep favourites, lists, saved articles and settings the same in all your browsers (your own browser sync). */
+    cloudSync: true,
   };
 
   /**

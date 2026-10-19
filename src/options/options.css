@@ -23,6 +23,7 @@ html, body { margin: 0; background: var(--cmcs-bg); min-height: 100%; }
 .psa-key input:focus { outline: none; border-color: var(--cmcs-text); }
 .psa-note { margin-left: 34px; font-size: 12px; }
 .psa-note a { color: inherit; }
+.sync-status { flex: 1; font-size: 12px; align-self: center; }
 .row input[type="number"] {
   width: 80px; font: inherit; padding: 5px 8px; color: var(--cmcs-text);
   background: transparent; border: 1.5px solid var(--cmcs-border-strong); border-radius: 0;

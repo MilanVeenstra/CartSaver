@@ -3,3 +3,6 @@ dist/
 test-results/
 *.zip
 build-id.txt
+
+# Private signing keys never go in the repository.
+*.pem

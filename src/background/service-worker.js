@@ -15,10 +15,11 @@
  *    (optional) reads Cardmarket's public price guide for the saved cards.
  * 6. Product pictures for the popup (see images.js).
  * 7. Optional: estimated PSA values for Pokémon cards (see psa.js).
+ * 8. The same saved data in all your browsers, through your own browser sync (see sync.js).
  */
-importScripts('../shared/store.js', 'images.js', 'psa.js');
+importScripts('../shared/store.js', 'images.js', 'psa.js', 'sync.js');
 
-const { store, images, psa } = self.CMCS;
+const { store, images, psa, sync } = self.CMCS;
 
 const UPDATE_ALARM = 'cmcs.selfUpdate';
 const UPDATE_CHECK_MINUTES = 1;
@@ -339,12 +340,14 @@ async function daily() {
   await images.pruneThumbs().catch(() => {});
   await refreshPrices().catch(() => {});
   await psa.refresh().catch(() => {});
+  await sync.merge().catch(() => {});
 }
 
 // --- Wiring ---------------------------------------------------------------------------
 
 function setUp() {
   updateBadge();
+  sync.mergeSoon(2000);
   ensureUpdateAlarm();
   ensureAwayAlarm();
   ensureDailyAlarm();
@@ -369,6 +372,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
     psa.refreshSoon();
   }
   if (changes[store.KEYS.items] || changes[store.KEYS.favorites] || changes[store.KEYS.carts]) images.captureSoon();
+  // Your other browsers: what changed here goes along a little later, in one go.
+  if (changes[store.KEYS.items] || changes[store.KEYS.favorites] || changes[store.KEYS.carts] || changes[store.KEYS.settings]) {
+    const turnedOn = changes[store.KEYS.settings] && !(changes[store.KEYS.settings].oldValue || {}).cloudSync && (changes[store.KEYS.settings].newValue || {}).cloudSync;
+    sync.mergeSoon(turnedOn ? 500 : 10000);
+  }
   if (changes[store.KEYS.meta]) {
     const before = (changes[store.KEYS.meta].oldValue || {}).cartExpiry;
     const after = (changes[store.KEYS.meta].newValue || {}).cartExpiry;
@@ -388,6 +396,18 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (psaOn(after) && (!psaOn(before) || before.pptApiKey !== after.pptApiKey)) psa.refresh({ force: true }).catch(() => {});
     if (psaOn(before) && !psaOn(after)) psa.clear().catch(() => {});
   }
+});
+// Something came in from another browser.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync') sync.mergeSoon(1500);
+});
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || message.type !== 'cmcs.syncNow') return false;
+  sync.merge().then(
+    (status) => sendResponse({ ok: true, status }),
+    (err) => sendResponse({ ok: false, error: err.message }),
+  );
+  return true;
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== 'cmcs.psaRefresh') return false;
@@ -418,7 +438,9 @@ ensureAwayAlarm();
 ensureDailyAlarm();
 images.ensureImageRule().catch((err) => console.warn('[Cart Saver] picture rule:', err));
 runningFingerprint().catch(() => {});
+// Woken up: catch up with your other browsers (only reads, unless something changed).
+sync.mergeSoon(3000);
 
 // Exposed for the end-to-end test.
 self.cmcsCheckForNewVersion = checkForNewVersion;
-self.cmcs = { warnExpiry, scheduleExpiryAlarm, awayCheck, refreshPrices, pruneStale, notify, images, sweepSoon, psa };
+self.cmcs = { warnExpiry, scheduleExpiryAlarm, awayCheck, refreshPrices, pruneStale, notify, images, sweepSoon, psa, sync };

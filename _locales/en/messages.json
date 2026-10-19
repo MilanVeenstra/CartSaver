@@ -81,7 +81,7 @@
     "message": "Delete everything"
   },
   "clearConfirm": {
-    "message": "Delete all saved articles, favourites and saved lists? This cannot be undone."
+    "message": "Delete all saved articles, favourites and saved lists? With sync on, this happens in your other browsers too. This cannot be undone."
   },
   "clearUnavailable": {
     "message": "Clear"
@@ -683,6 +683,12 @@
   "settingReminderHelp": {
     "message": "When saved articles fell out of your cart, a small panel offers to put them back."
   },
+  "settingSync": {
+    "message": "Sync through your browser account"
+  },
+  "settingSyncHelp": {
+    "message": "Your favourites, lists, saved articles and settings are the same in all your browsers, through your own browser's sync (in Chrome: your Google account; switch on \"Extensions\" under Sync). Everyone keeps their own data; nothing goes to us. Pictures and prices are fetched by every browser itself."
+  },
   "settingTrend": {
     "message": "Compare prices with the trend"
   },
@@ -775,6 +781,27 @@
   },
   "summarySub": {
     "message": "$1 from $2"
+  },
+  "syncBusy": {
+    "message": "Busy…"
+  },
+  "syncError": {
+    "message": "Sync failed: $1"
+  },
+  "syncFull": {
+    "message": "$1 only in this browser for now: the sync is full."
+  },
+  "syncNotYet": {
+    "message": "Not synced yet."
+  },
+  "syncNow": {
+    "message": "Sync now"
+  },
+  "syncStatus": {
+    "message": "Synced: $1 · $2 KB of about 100 KB."
+  },
+  "syncTitle": {
+    "message": "Your other browsers"
   },
   "tabCart": {
     "message": "Cart"

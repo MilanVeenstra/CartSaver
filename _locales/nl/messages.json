@@ -81,7 +81,7 @@
     "message": "Alles wissen"
   },
   "clearConfirm": {
-    "message": "Alle opgeslagen artikelen, favorieten en bewaarde lijsten wissen? Dit kan niet ongedaan worden gemaakt."
+    "message": "Alle opgeslagen artikelen, favorieten en bewaarde lijsten wissen? Met synchroniseren aan gebeurt dat ook in je andere browsers. Dit kan niet ongedaan worden gemaakt."
   },
   "clearUnavailable": {
     "message": "Opschonen"
@@ -683,6 +683,12 @@
   "settingReminderHelp": {
     "message": "Als opgeslagen artikelen uit je mandje zijn verdwenen, biedt een klein paneel aan om ze terug te zetten."
   },
+  "settingSync": {
+    "message": "Synchroniseren via je browser-account"
+  },
+  "settingSyncHelp": {
+    "message": "Je favorieten, lijsten, opgeslagen artikelen en instellingen zijn in al je browsers hetzelfde, via de sync van je eigen browser (in Chrome: je Google-account; zet daar \"Extensies\" aan bij Synchroniseren). Ieder heeft zo zijn eigen gegevens; niets gaat naar ons. Plaatjes en prijzen haalt elke browser zelf op."
+  },
   "settingTrend": {
     "message": "Prijzen vergelijken met de trend"
   },
@@ -775,6 +781,27 @@
   },
   "summarySub": {
     "message": "$1 bij $2"
+  },
+  "syncBusy": {
+    "message": "Bezig…"
+  },
+  "syncError": {
+    "message": "Synchroniseren lukte niet: $1"
+  },
+  "syncFull": {
+    "message": "$1 nog alleen in deze browser: de sync is vol."
+  },
+  "syncNotYet": {
+    "message": "Nog niet gesynchroniseerd."
+  },
+  "syncNow": {
+    "message": "Nu synchroniseren"
+  },
+  "syncStatus": {
+    "message": "Gesynchroniseerd: $1 · $2 KB van ongeveer 100 KB."
+  },
+  "syncTitle": {
+    "message": "Je andere browsers"
   },
   "tabCart": {
     "message": "Winkelmandje"

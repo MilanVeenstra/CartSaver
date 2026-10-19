@@ -2056,6 +2056,159 @@ describe('Cardmarket Cart Saver', () => {
     });
   });
 
+  describe('the same in all your browsers', () => {
+    const LIST_ID = 'cart-sync-test';
+    const NEW_FAV = '1611110004';
+    const remote = () => sw.evaluate(() => chrome.storage.sync.get(null));
+    const merge = () => sw.evaluate(() => self.cmcs.sync.merge());
+    const setSync = (on) =>
+      sw.evaluate(async (value) => {
+        const { 'cmcs.settings': settings } = await chrome.storage.local.get('cmcs.settings');
+        await chrome.storage.local.set({ 'cmcs.settings': { ...settings, cloudSync: value } });
+      }, on);
+    /** Another browser of the same person writes to the synced copy. */
+    const elsewhere = (entries) => sw.evaluate((e) => chrome.storage.sync.set(e), entries);
+    const favorite = (id) => {
+      const a = mock.article(id);
+      return {
+        articleId: id, productId: a.productId, game: 'Magic', lang: 'en', name: a.name, expansion: a.expansion,
+        productUrl: `${CM}/en/Magic/Products/Singles/${a.expansionSlug}/${a.cardSlug}`, condition: a.condition, conditionLabel: a.conditionLabel,
+        language: a.language, languageLabel: a.languageLabel, foil: false, extras: [], price: a.price, seller: a.seller, favoritedAt: Date.now(), unavailable: false,
+      };
+    };
+
+    before(async () => {
+      // A clean start: nothing synced yet, a known list here.
+      await setSync(false);
+      await sw.evaluate(async () => {
+        await chrome.storage.sync.clear();
+        await chrome.storage.local.remove('cmcs.sync');
+      });
+      const article = (i) => ({ articleId: String(9300000000 + i), name: `Lijstkaart ${i}`, game: 'Magic', lang: 'en', expansion: 'Commander Masters',
+        productUrl: `${CM}/en/Magic/Products/Singles/Commander-Masters/Card-${i}`, price: 1, wantedAmount: 1, seller: 'snowc', sellerUrl: `${CM}/en/Magic/Users/snowc`, conditionLabel: 'NM', languageLabel: 'English', extras: [] });
+      await sw.evaluate(async ({ bog, fav, list }) => {
+        await chrome.storage.local.set({
+          'cmcs.items': { [bog.articleId]: bog },
+          'cmcs.favorites': { [fav.articleId]: fav },
+          'cmcs.carts': [list],
+          'cmcs.job': null,
+        });
+      }, {
+        bog: { ...favorite(BOG), amount: 2, wantedAmount: 2, status: 'in_cart', thumb: 'data:image/png;base64,AAAA', lastSeenInCartAt: Date.now(), trend: { value: 0.5, at: Date.now() } },
+        fav: favorite(MAGE),
+        list: { id: LIST_ID, name: 'Commander-deck', createdAt: Date.now(), game: 'Magic', items: Array.from({ length: 60 }, (_, i) => article(i)) },
+      });
+      await setSync(true);
+    });
+    after(async () => {
+      await setSync(false);
+      await sw.evaluate(async () => {
+        await chrome.storage.sync.clear();
+        await chrome.storage.local.remove('cmcs.sync');
+      });
+      await setSync(true);
+    });
+
+    it('sends what you save to your own browser account, small and without what only this browser needs', async () => {
+      const status = await merge();
+      assert.equal(status.error, null);
+      const all = await remote();
+      assert.ok(all.s && all.s.v.delayMs === DELAY_MS, 'settings');
+      assert.equal(all.s.v.cloudSync, undefined, 'whether this browser syncs stays here');
+      assert.ok(all[`f.${MAGE}`], 'the favourite');
+      const bog = all[`i.${BOG}`].v;
+      assert.equal(bog.w, 2);
+      assert.equal(bog.u, '/en/Magic/Products/Singles/Commander-2018/Bojuka-Bog', 'links without the part every record shares');
+      assert.equal(JSON.stringify(bog).includes('base64'), false, 'no pictures');
+      assert.equal(bog.trend, undefined, 'no prices');
+      // A list too large for one sync item goes in parts.
+      assert.ok(all[`l.${LIST_ID}`].n > 1 && typeof all[`l.${LIST_ID}~1`] === 'string', 'split');
+      assert.ok(status.bytes > 0 && status.bytes < 100 * 1024);
+    });
+
+    it('takes what you saved in another browser, keeping what only this browser knows', async () => {
+      await elsewhere({
+        [`f.${NEW_FAV}`]: { u: Date.now(), v: await sw.evaluate((fav) => self.cmcs.sync.pack(fav, self.cmcs.sync.FAVORITE_FIELDS), favorite(NEW_FAV)) },
+        [`i.${BOG}`]: { u: Date.now(), v: { ...(await remote())[`i.${BOG}`].v, w: 3 } },
+      });
+      await waitFor(async () => (await favorites())[NEW_FAV], 'the new favourite here');
+      const fav = (await favorites())[NEW_FAV];
+      assert.equal(fav.productUrl, `${CM}/en/Magic/Products/Singles/Commander-Masters/Sol-Ring`);
+      const bog = await waitFor(async () => (await items())[BOG]?.wantedAmount === 3 && (await items())[BOG], 'the change here');
+      assert.equal(bog.thumb, 'data:image/png;base64,AAAA', 'the picture stays');
+      assert.equal(bog.trend.value, 0.5, 'and the trend');
+    });
+
+    it('what you remove in one browser goes in the other too', async () => {
+      await sw.evaluate((id) => chrome.storage.sync.remove(`f.${id}`), NEW_FAV);
+      await waitFor(async () => !(await favorites())[NEW_FAV], 'removed here');
+      await sw.evaluate((id) => self.CMCS.store.removeFavorites([id]), MAGE);
+      await merge();
+      assert.equal((await remote())[`f.${MAGE}`], undefined, 'removed there');
+    });
+
+    it('a new browser gets everything, the large list whole', async () => {
+      // A browser that never synced: nothing saved, nothing agreed yet.
+      await setSync(false);
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.items': {}, 'cmcs.favorites': {}, 'cmcs.carts': [] }).then(() => chrome.storage.local.remove('cmcs.sync')));
+      await setSync(true);
+      await merge();
+      const list = await waitFor(async () => ((await storage())['cmcs.carts'] || []).find((c) => c.id === LIST_ID), 'the list');
+      assert.equal(list.items.length, 60);
+      assert.equal(list.items[59].productUrl, `${CM}/en/Magic/Products/Singles/Commander-Masters/Card-59`);
+      assert.equal((await items())[BOG].wantedAmount, 3);
+    });
+
+    it('settings follow you, except whether a browser syncs', async () => {
+      const s = (await remote()).s.v;
+      await elsewhere({ s: { u: Date.now(), v: { ...s, delayMs: 2000, notify: false } } });
+      await waitFor(async () => (await storage())['cmcs.settings'].delayMs === 2000, 'taken');
+      const settings = (await storage())['cmcs.settings'];
+      assert.equal(settings.notify, false);
+      assert.equal(settings.cloudSync, true);
+      await sw.evaluate((delayMs) => chrome.storage.local.get('cmcs.settings').then(({ 'cmcs.settings': st }) => chrome.storage.local.set({ 'cmcs.settings': { ...st, delayMs, notify: true } })), DELAY_MS);
+      await merge();
+    });
+
+    it('when the sync is full, what matters most goes first and nothing is thrown away', async () => {
+      await sw.evaluate(async () => {
+        const { 'cmcs.items': current } = await chrome.storage.local.get('cmcs.items');
+        for (let i = 0; i < 700; i += 1) {
+          const id = String(9400000000 + i);
+          current[id] = { articleId: id, name: `Testkaart met een lange naam ${i}`, game: 'Magic', lang: 'en', expansion: 'Commander Masters', status: 'missing',
+            productUrl: `https://www.cardmarket.com/en/Magic/Products/Singles/Commander-Masters/Testkaart-${i}`, price: 1, amount: 1, wantedAmount: 1, seller: 'Testverkoper', extras: [] };
+        }
+        await chrome.storage.local.set({ 'cmcs.items': current });
+      });
+      const status = await merge();
+      assert.equal(status.error, null);
+      assert.ok(status.skipped > 0, 'not everything fits');
+      const all = await remote();
+      assert.ok(Object.keys(all).filter((k) => !k.includes('~')).length <= 512);
+      assert.ok(all[`l.${LIST_ID}`] && all.s, 'the list and the settings went first');
+      assert.equal(Object.keys(await items()).length >= 701, true, 'all still here');
+      const options = await context.newPage();
+      await options.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+      await waitFor(async () => /nog alleen in deze browser: de sync is vol/.test(await options.locator('#syncStatus').innerText()), 'said in the settings');
+      await shot(options, '29-options-sync');
+      await options.close();
+      await sw.evaluate(async () => {
+        const { 'cmcs.items': current } = await chrome.storage.local.get('cmcs.items');
+        for (const id of Object.keys(current)) if (id.startsWith('94000')) delete current[id];
+        await chrome.storage.local.set({ 'cmcs.items': current });
+      });
+    });
+
+    it('switched off, nothing goes anywhere', async () => {
+      await setSync(false);
+      const before = await remote();
+      await sw.evaluate((fav) => chrome.storage.local.get('cmcs.favorites').then(({ 'cmcs.favorites': f }) => chrome.storage.local.set({ 'cmcs.favorites': { ...f, [fav.articleId]: fav } })), favorite(MAGE));
+      assert.equal(await merge(), null);
+      assert.deepEqual(Object.keys(await remote()).sort(), Object.keys(before).sort());
+      await setSync(true);
+    });
+  });
+
   describe('a calm panel', () => {
     const FAKE = Array.from({ length: 14 }, (_, i) => String(9000000001 + i));
     const fake = (id, i) => ({

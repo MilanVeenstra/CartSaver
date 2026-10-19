@@ -20,6 +20,7 @@
   $('awayChecks').checked = settings.awayChecks;
   $('priceTrend').checked = settings.priceTrend;
   $('psaEstimate').checked = settings.psaEstimate;
+  $('cloudSync').checked = settings.cloudSync;
   $('pptApiKey').value = settings.pptApiKey || '';
   $('delay').value = (settings.delayMs / 1000).toFixed(1);
 
@@ -49,6 +50,33 @@
     if (!reply || !reply.status) $('psaStatus').textContent = t('psaStatusOff');
     renderPsaStatus();
   });
+
+  // Your other browsers.
+  $('cloudSync').addEventListener('change', (e) => save({ cloudSync: e.target.checked }));
+  $('syncNow').addEventListener('click', async () => {
+    $('syncStatus').textContent = t('syncBusy');
+    await chrome.runtime.sendMessage({ type: 'cmcs.syncNow' }).catch(() => null);
+    renderSyncStatus();
+  });
+  async function renderSyncStatus() {
+    const current = await store.getSettings();
+    $('syncBox').hidden = !current.cloudSync;
+    const { 'cmcs.sync': state } = await chrome.storage.local.get('cmcs.sync');
+    const status = state && state.status;
+    if (!current.cloudSync || !status) {
+      $('syncStatus').textContent = current.cloudSync ? t('syncNotYet') : '';
+      return;
+    }
+    const when = new Date(status.at).toLocaleString(chrome.i18n.getUILanguage(), { dateStyle: 'short', timeStyle: 'short' });
+    const kb = (status.bytes || 0) < 1024 ? '<1' : String(Math.round(status.bytes / 1024));
+    $('syncStatus').textContent = status.error
+      ? t('syncError', status.error)
+      : [t('syncStatus', when, kb), status.skipped ? t('syncFull', String(status.skipped)) : null].filter(Boolean).join(' ');
+  }
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && (changes['cmcs.sync'] || changes[store.KEYS.settings])) renderSyncStatus();
+  });
+  renderSyncStatus();
 
   /** What the last look-up found, or why it stopped. */
   async function renderPsaStatus() {
