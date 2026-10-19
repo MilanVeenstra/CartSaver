@@ -5,7 +5,8 @@
   "description": "Chrome extension that saves your Cardmarket shopping cart and refills it after it was emptied.",
   "type": "module",
   "scripts": {
-    "test": "node --test --test-concurrency=1 tests/*.test.mjs"
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "package": "bash scripts/package.sh"
   },
   "devDependencies": {
     "playwright": "1.56.1"

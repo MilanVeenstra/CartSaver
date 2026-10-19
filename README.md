@@ -118,6 +118,8 @@ changes, commits or a different branch.
 
 ## Privacy
 
+The full privacy policy is in [PRIVACY.md](PRIVACY.md).
+
 - Everything stays in your own browser. There is no server and nothing is
   sent.
 - Cart Saver only talks to Cardmarket: the site itself, through your own
@@ -181,6 +183,7 @@ npm test                          # all tests
 SCREENSHOT_DIR=shots npm test     # also screenshots
 CMCS_LIVE=1 npm test              # also pictures from the real Cardmarket image server
 CHROMIUM_PATH=/path/to/chrome npm test   # a Chromium that is already on your computer
+npm run package                   # the Chrome Web Store upload (dist/), see docs/release.md
 ```
 
 More background: [research](docs/RESEARCH.md),
