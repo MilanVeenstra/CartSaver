@@ -95,7 +95,7 @@ nemen je andere browsers het daarna over.
 
 | Controle | Resultaat |
 |---|---|
-| Testsuite (`npm test`) | Zie §7 |
+| Testsuite (`npm test`) | 122/123 groen, zie §7 |
 | Vertalingen | Test: dezelfde sleutels in beide talen, dezelfde `$1…$9`, geen lege of onvertaalde teksten, en elke sleutel die de code gebruikt bestaat |
 | Optionele toestemmingen | Test met het echte manifest: een verse installatie mag alleen Cardmarket bereiken. Staat een functie via de sync aan zonder toestemming, dan gaat er geen verzoek de deur uit en vraagt de instellingenpagina erom. |
 | Externe of dynamische code | Geen `eval`, `new Function`, timers met tekst of externe scripts |
@@ -242,6 +242,15 @@ testgegevens.
 
 ## 7. Deze versie
 
-- **Bestand:** `dist/cart-saver-1.6.6.zip`
-- **SHA-256:** (volgt na de laatste bouw)
-- **Testsuite:** (volgt na de laatste run)
+- **Bestand:** `dist/cart-saver-1.6.6.zip` (28 bestanden, ~135 KB)
+- **SHA-256:** `fc0c61aa6295298dfd74ac33400b0406e70529da29c3324a8fbb70b9da7304d1`
+- **Testsuite:** 122 van 123 groen. De enige fout heeft het echte
+  cardmarket.com nodig, dat vanuit de ontwikkelomgeving geblokkeerd is. Hij
+  faalde ook al in eerdere versies.
+- **Exacte uploadmap** (`dist/extension/`) geladen in Chromium: mandje wordt
+  opgeslagen, paneel, popup en instellingen werken, NL/EN wisselt, de
+  optionele websites zijn niet toegestaan bij installeren, geen fouten.
+- **UI-audit** in het Nederlands en het Engels, licht en donker, smal
+  venster: geen fouten of waarschuwingen in de console. Gevonden en
+  opgelost: de knop "Nu ophalen" stak op een smal scherm buiten beeld,
+  "1 cards" werd "1 card", Engelse tijden zijn 24-uurs.

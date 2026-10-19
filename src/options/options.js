@@ -138,7 +138,8 @@
     }
     if (!status || !status.at) return;
     const when = new Date(status.at).toLocaleString(CMCS.locale(), { dateStyle: 'short', timeStyle: 'short' });
-    const errors = { key: 'psaErrorKey', limit: 'psaErrorLimit' };
+    // "permission": allowed just now; the look-up it waited for is on its way.
+    const errors = { key: 'psaErrorKey', limit: 'psaErrorLimit', permission: 'psaStatusBusy' };
     $('psaStatus').textContent = status.error
       ? t(errors[status.error] || 'psaErrorOther', status.errorDetail || status.error)
       : [CMCS.tn('psaStatus', status.known || 0, when, String(status.known || 0)), status.waiting ? t('psaStatusWaiting', String(status.waiting)) : null].filter(Boolean).join(' ');
@@ -164,7 +165,7 @@
     }
     const when = new Date(status.at).toLocaleString(CMCS.locale(), { dateStyle: 'short', timeStyle: 'short' });
     const cards = Object.values(status.games || {}).reduce((sum, n) => sum + n, 0);
-    $('trendStatus').textContent = status.error ? t('trendStatusError', status.error) : CMCS.tn('trendStatus', cards, when, String(cards));
+    $('trendStatus').textContent = status.error === 'permission' ? t('psaStatusBusy') : status.error ? t('trendStatusError', status.error) : CMCS.tn('trendStatus', cards, when, String(cards));
   }
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && (changes['cmcs.prices'] || changes[store.KEYS.settings])) renderTrendStatus();
