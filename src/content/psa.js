@@ -55,6 +55,11 @@
     store.onChanged((changes) => {
       if (changes[store.KEYS.psa] || changes[store.KEYS.items]) load();
     });
+    // Another language: new labels (their tooltips are words).
+    CMCS.i18n.onChange(() => {
+      document.querySelectorAll('tr[data-article-id] cmcs-psa').forEach((label) => label.remove());
+      paint();
+    });
     // Cardmarket redraws rows (fewer copies, a removal): label the new ones too.
     let timer = null;
     new MutationObserver(() => {

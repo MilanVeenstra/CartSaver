@@ -81,13 +81,13 @@
     "message": "Delete everything"
   },
   "clearConfirm": {
-    "message": "Delete all saved articles, favourites and saved lists? With sync on, this happens in your other browsers too. This cannot be undone."
+    "message": "Delete everything Cart Saver keeps? Your saved articles, favourites, lists, settings and API key go, also from your browser account's sync and so from your other browsers. This cannot be undone."
   },
   "clearUnavailable": {
     "message": "Clear"
   },
   "cleared": {
-    "message": "All saved articles, favourites and saved lists were deleted."
+    "message": "Everything was deleted."
   },
   "close": {
     "message": "Close"
@@ -204,7 +204,7 @@
     "message": "Remembers what you put in your Cardmarket shopping cart and puts it back with one click after the cart was emptied."
   },
   "extName": {
-    "message": "Cardmarket Cart Saver"
+    "message": "Cart Saver for Cardmarket"
   },
   "favAdd": {
     "message": "Save as favourite"
@@ -329,6 +329,12 @@
   "jobCancelled": {
     "message": "Stopped before all articles were put back."
   },
+  "languageAuto": {
+    "message": "Automatic"
+  },
+  "languageLabel": {
+    "message": "Language"
+  },
   "listAllInCart": {
     "message": "Everything on this list is already in your cart."
   },
@@ -413,6 +419,15 @@
   "partialNote": {
     "message": "$1 of $2 in your cart"
   },
+  "permissionGrant": {
+    "message": "Allow"
+  },
+  "permissionNeeded": {
+    "message": "Cart Saver may not reach $1 in this browser yet."
+  },
+  "permissionRefused": {
+    "message": "This needs permission for that website."
+  },
   "pillAttention": {
     "message": "Cart Saver · $1 to check"
   },
@@ -426,7 +441,7 @@
     "message": "Price $1 higher (was $2)"
   },
   "privacyNote": {
-    "message": "Everything is stored locally in your browser. Cart Saver only talks to Cardmarket (the site and its pictures), through your own session, and only if you switch on the PSA estimate also to PokemonPriceTracker."
+    "message": "Everything is kept in your own browser, and with sync on in your own browser account's sync. Cart Saver only talks to Cardmarket (the site, its pictures and, if you switch it on, the price guide), through your own session, and only if you switch on the PSA estimate also to PokemonPriceTracker."
   },
   "progressCount": {
     "message": "$1 of $2"
@@ -466,6 +481,9 @@
   },
   "psaStatusOff": {
     "message": "Switch it on and enter a key first."
+  },
+  "psaStatusOne": {
+    "message": "Last updated: $1 · 1 card with PSA prices."
   },
   "psaStatusWaiting": {
     "message": "$1 waiting for the next round (daily limit)."
@@ -653,6 +671,12 @@
   "settingDelayHelp": {
     "message": "Articles are put back one by one. A longer pause is friendlier to Cardmarket."
   },
+  "settingLanguage": {
+    "message": "Language"
+  },
+  "settingLanguageHelp": {
+    "message": "The language Cart Saver speaks. Automatic follows the language of your browser."
+  },
   "settingNotify": {
     "message": "Notifications"
   },
@@ -687,7 +711,7 @@
     "message": "Sync through your browser account"
   },
   "settingSyncHelp": {
-    "message": "Your favourites, lists, saved articles and settings are the same in all your browsers, through your own browser's sync (in Chrome: your Google account; switch on \"Extensions\" under Sync). Everyone keeps their own data; nothing goes to us. Pictures and prices are fetched by every browser itself."
+    "message": "Your favourites, lists, saved articles and settings are the same in all your browsers, through your own browser's sync (in Chrome: your Google account; switch on \"Extensions\" under Sync). Everyone keeps their own data; nothing goes to us. Pictures, prices and your API key stay separate in every browser."
   },
   "settingTrend": {
     "message": "Compare prices with the trend"
@@ -823,6 +847,9 @@
   },
   "trendStatusError": {
     "message": "Could not read the price guide: $1"
+  },
+  "trendStatusOne": {
+    "message": "Last read: $1 (1 article)."
   },
   "undo": {
     "message": "Undo"

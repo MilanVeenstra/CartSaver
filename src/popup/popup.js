@@ -8,10 +8,25 @@
   const style = document.createElement('style');
   style.textContent = ui.STYLES;
   document.head.prepend(style);
+  await CMCS.i18n.ready;
   CMCS.localize(document);
-  document.documentElement.lang = chrome.i18n.getUILanguage();
+  const shownLang = CMCS.lang();
+  document.documentElement.lang = shownLang;
   $('brand').append(ui.brand(20));
   $('options').append(ui.icon('settings'));
+
+  // NL | EN in the header. The popup starts over in the new language.
+  function paintLanguage() {
+    for (const button of $('lang').querySelectorAll('[data-lang]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.lang === CMCS.lang()));
+    }
+  }
+  paintLanguage();
+  $('lang').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-lang]');
+    if (button && button.dataset.lang !== CMCS.i18n.chosen()) store.saveSettings({ language: button.dataset.lang });
+  });
+  CMCS.i18n.onChange((lang) => (lang === shownLang ? paintLanguage() : location.reload()));
 
   const { STATUS } = store;
   const inCartStatus = (item) => Boolean(item) && (item.status === STATUS.IN_CART || item.status === STATUS.PARTIAL);
@@ -335,7 +350,7 @@
   }
 
   function formatDate(ts) {
-    return ts ? new Date(ts).toLocaleDateString(chrome.i18n.getUILanguage(), { day: 'numeric', month: 'short' }) : '';
+    return ts ? new Date(ts).toLocaleDateString(CMCS.locale(), { day: 'numeric', month: 'short' }) : '';
   }
 
   // ---------------------------------------------------------------------------
@@ -556,7 +571,7 @@
     const at = typeof meta.cartExpiry === 'number' ? meta.cartExpiry : null;
     if (!at || at <= Date.now()) return null;
     const minutes = Math.max(1, Math.round((at - Date.now()) / 60000));
-    const time = new Date(at).toLocaleTimeString(chrome.i18n.getUILanguage(), { hour: '2-digit', minute: '2-digit' });
+    const time = new Date(at).toLocaleTimeString(CMCS.locale(), { hour: '2-digit', minute: '2-digit' });
     return h('p', { class: `cmcs-expiry ${minutes <= 10 ? 'cmcs-expiry--soon' : ''}` }, t('expiryLine', time, String(minutes)));
   }
 

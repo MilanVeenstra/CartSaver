@@ -42,6 +42,7 @@ replacement.
 | **Replacements for sold cards** | The same card from the same seller, from a seller already in your cart (no extra shipping), or the cheapest similar offer. |
 | **All games in one cart** | Magic, Pokémon, Yu-Gi-Oh!, One Piece, Lorcana… You choose which games go back. |
 | **Favourites and lists** | Save an offer with a ☆, or your whole cart as a list ("Commander deck"), to put it back later with one click. |
+| **Dutch or English** | *NL / EN* in the popup's header switches the language at once, everywhere (popup, panel on Cardmarket, notifications). In the settings: *Automatic* follows your browser. |
 | **Warned in time** | Shipping costs per seller, a notification when something disappears, and what time Cardmarket empties your cart (if Cardmarket shows it). |
 
 ## How it works

@@ -145,6 +145,12 @@
     const cards = { ...(saved.cards || {}) };
     const status = { ...(saved.status || {}) };
     if (status.day !== today()) Object.assign(status, { day: today(), lookups: 0 });
+    // Switched on in another browser (sync), not allowed here yet: the settings page asks.
+    if (!(await store.hasOrigin(store.ORIGINS.psa))) {
+      Object.assign(status, { at: Date.now(), error: 'permission', errorDetail: null });
+      await chrome.storage.local.set({ [store.KEYS.psa]: { cards, status } });
+      return status;
+    }
 
     const now = Date.now();
     const items = Object.values(await store.getItems()).filter((item) => isPokemonSingle(item) && WANTED.has(item.status) && store.psaBand(item));

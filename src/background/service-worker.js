@@ -3,10 +3,9 @@
  * script, inside the user's own cardmarket.com tab; this worker only:
  *
  * 1. Keeps the toolbar badge: saved articles no longer (fully) in the cart.
- * 2. Self-updates unpacked installs: when the files on disk were updated
- *    (e.g. by scripts/autoupdate-mac.sh pulling every push from GitHub), the
- *    extension reloads itself. A Chrome Web Store install updates through the
- *    store instead.
+ * 2. Development only (an unpacked folder, installType "development"): when
+ *    the files in that folder changed, reload them. Nothing is downloaded; a
+ *    Chrome Web Store install never does this and updates through the store.
  * 3. Shows notifications: the cart was emptied while you looked elsewhere,
  *    or Cardmarket is about to empty it (5 minutes before the time it shows).
  * 4. Optional: asks an open Cardmarket tab to look at the cart every 10
@@ -17,9 +16,9 @@
  * 7. Optional: estimated PSA values for Pokémon cards (see psa.js).
  * 8. The same saved data in all your browsers, through your own browser sync (see sync.js).
  */
-importScripts('../shared/store.js', 'images.js', 'psa.js', 'sync.js');
+importScripts('../shared/i18n.js', '../shared/store.js', 'images.js', 'psa.js', 'sync.js');
 
-const { store, images, psa, sync } = self.CMCS;
+const { store, images, psa, sync, i18n, t, tn } = self.CMCS;
 
 const UPDATE_ALARM = 'cmcs.selfUpdate';
 const UPDATE_CHECK_MINUTES = 1;
@@ -27,13 +26,14 @@ const UPDATE_CHECK_MINUTES = 1;
 const UPDATE_SETTLE_MS = 5000;
 
 async function updateBadge() {
+  await i18n.ready;
   // Copies that can go back: the same number the popup and the panel show.
   const count = store.copiesToReturn(store.refillCandidates(await store.getItems()));
   await chrome.action.setBadgeBackgroundColor({ color: '#b3122b' });
   if (chrome.action.setBadgeTextColor) await chrome.action.setBadgeTextColor({ color: '#ffffff' });
   await chrome.action.setBadgeText({ text: count ? String(count) : '' });
   await chrome.action.setTitle({
-    title: count ? tn('badgeTitle', count, [String(count)]) : 'Cart Saver',
+    title: count ? tn('badgeTitle', count, count) : 'Cart Saver',
   });
 }
 
@@ -138,10 +138,6 @@ async function ensureUpdateAlarm() {
 
 const EXPIRY_ALARM = 'cmcs.expiry';
 const EXPIRY_WARN_MS = 5 * 60 * 1000;
-const t = (key, subs) => chrome.i18n.getMessage(key, subs) || key;
-/** `<key>One` for exactly one ("1 minuut"), `<key>` otherwise. */
-const tn = (key, count, subs) => t(Number(count) === 1 ? `${key}One` : key, subs);
-
 async function notify(id, title, message, url) {
   const settings = await store.getSettings();
   if (!settings.notify || !chrome.notifications) return false;
@@ -191,13 +187,14 @@ async function scheduleExpiryAlarm() {
 }
 
 async function warnExpiry() {
+  await i18n.ready;
   const next = await nextExpiry();
   if (!next) return false;
   const items = await store.getItems();
   const inCart = Object.values(items).filter((item) => item.status === store.STATUS.IN_CART || item.status === store.STATUS.PARTIAL);
   if (!inCart.length) return false;
   const minutes = Math.max(1, Math.round((next.at - Date.now()) / 60000));
-  return notify('expiry', t('notifyExpiryTitle'), tn('notifyExpiryText', minutes, [String(minutes)]), cartUrl(inCart[0].lang, inCart[0].game));
+  return notify('expiry', t('notifyExpiryTitle'), tn('notifyExpiryText', minutes, minutes), cartUrl(inCart[0].lang, inCart[0].game));
 }
 
 // --- Looking at the cart while you are away from Cardmarket ---------------------------
@@ -277,6 +274,12 @@ async function refreshPrices({ force = false } = {}) {
   if (!settings.priceTrend && !force) return null;
   const last = (await chrome.storage.local.get('cmcs.prices'))['cmcs.prices'];
   if (!force && last && !last.error && Date.now() - (last.at || 0) < PRICE_GUIDE_MIN_AGE_MS) return last;
+  // Switched on in another browser (sync), not allowed here yet: the settings page asks.
+  if (!(await store.hasOrigin(store.ORIGINS.trend))) {
+    const status = { ...(last || {}), at: Date.now(), games: (last && last.games) || {}, error: 'permission' };
+    await chrome.storage.local.set({ 'cmcs.prices': status });
+    return status;
+  }
   const [items, favorites] = await Promise.all([store.getItems(), store.getFavorites()]);
   const articles = [...Object.values(items), ...Object.values(favorites)].filter((a) => a.productId);
   const games = [...new Set(articles.map((a) => a.game))].filter((game) => PRICE_GUIDE_GAMES[game]);
@@ -397,12 +400,23 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (psaOn(before) && !psaOn(after)) psa.clear().catch(() => {});
   }
 });
+/** Asked from one of the extension's own pages (settings, popup), not from a website. */
+const fromOwnPage = (sender) => typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''));
+/** Asked by the content script on www.cardmarket.com. */
+const fromCardmarket = (sender) => {
+  try {
+    return new URL(sender.url).origin === 'https://www.cardmarket.com';
+  } catch {
+    return false;
+  }
+};
+
 // Something came in from another browser.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync') sync.mergeSoon(1500);
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || message.type !== 'cmcs.syncNow') return false;
+  if (!message || message.type !== 'cmcs.syncNow' || !fromOwnPage(sender)) return false;
   sync.merge().then(
     (status) => sendResponse({ ok: true, status }),
     (err) => sendResponse({ ok: false, error: err.message }),
@@ -410,7 +424,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || message.type !== 'cmcs.psaRefresh') return false;
+  // Only from the settings page: it spends the user's API credits, past the daily limit.
+  if (!message || message.type !== 'cmcs.psaRefresh' || !fromOwnPage(sender)) return false;
   psa.refresh({ force: true }).then(
     (status) => sendResponse({ ok: true, status }),
     (err) => sendResponse({ ok: false, error: err.message }),
@@ -418,14 +433,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || message.type !== 'cmcs.notify' || message.kind !== 'emptied') return false;
+  if (!message || message.type !== 'cmcs.notify' || message.kind !== 'emptied' || !fromCardmarket(sender)) return false;
+  if (!/^[a-z]{2}$/.test(String(message.lang)) || !/^[A-Z][A-Za-z0-9]+$/.test(String(message.game))) return false;
   const count = message.count || 0;
-  notify(`emptied-${message.game}`, t('notifyEmptiedTitle'), tn('notifyEmptiedText', count, [String(count)]), cartUrl(message.lang, message.game)).then(
+  i18n.ready
+    .then(() => notify(`emptied-${message.game}`, t('notifyEmptiedTitle'), tn('notifyEmptiedText', count, count), cartUrl(message.lang, message.game)))
+    .then(
     (shown) => sendResponse({ ok: shown }),
     () => sendResponse({ ok: false }),
   );
   return true;
 });
+// Allowed at last to reach an opt-in website that was switched on (in another
+// browser, through sync): use it right away. Switching a feature on here asks
+// first and then saves the setting, and that saved setting starts it.
+chrome.permissions.onAdded.addListener(async ({ origins = [] }) => {
+  const settings = await store.getSettings();
+  const { 'cmcs.prices': prices } = await chrome.storage.local.get('cmcs.prices');
+  const { status: psaStatus } = await store.getPsa();
+  const waited = (status) => Boolean(status && status.error === 'permission');
+  if (origins.includes(store.ORIGINS.trend) && settings.priceTrend && waited(prices)) refreshPrices({ force: true }).catch(() => {});
+  if (origins.includes(store.ORIGINS.psa) && settings.psaEstimate && waited(psaStatus)) psa.refresh({ force: true }).catch(() => {});
+});
+// Texts in the language picked in the settings, for the panel on Cardmarket (content scripts cannot read them).
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || message.type !== 'cmcs.messages') return false;
+  i18n.messages(message.lang).then(
+    (messages) => sendResponse({ ok: true, messages }),
+    (err) => sendResponse({ ok: false, error: err.message }),
+  );
+  return true;
+});
+// Another language: the toolbar button's tooltip too.
+i18n.onChange(() => updateBadge());
 if (chrome.notifications) {
   chrome.notifications.onClicked.addListener(openFromNotification);
 }

@@ -156,8 +156,7 @@
   function languageName(label, id) {
     const known = Number(id) || LANGUAGE_BY_NAME[label];
     if (!known || !LANGUAGE_EN[known]) return label || null;
-    const dutch = /^nl/i.test((root.chrome && chrome.i18n && chrome.i18n.getUILanguage()) || '');
-    return dutch ? LANGUAGE_NL[known] : LANGUAGE_EN[known];
+    return CMCS.lang() === 'nl' ? LANGUAGE_NL[known] : LANGUAGE_EN[known];
   }
 
   /** "Commander Masters · EX · Duits · Foil" */
@@ -172,9 +171,8 @@
 
   /** "$45", "$3,50", "$1.234": graded prices are eBay sales in dollars, shown as such. */
   function dollars(value) {
-    const lang = root.chrome && chrome.i18n ? chrome.i18n.getUILanguage() : 'en';
     const digits = value < 10 ? 2 : 0;
-    return `$${value.toLocaleString(lang, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+    return `$${value.toLocaleString(CMCS.locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
   }
 
   /**
@@ -549,6 +547,16 @@
     .cmcs-btn--danger { background: transparent; color: var(--cmcs-red); border-color: var(--cmcs-border-strong); font-weight: 600; }
     .cmcs-btn--danger:hover:not(:disabled) { background: transparent; color: var(--cmcs-red); border-color: var(--cmcs-red); }
     .cmcs-btn--small { min-height: 26px; padding: 3px 9px; font-size: 12px; }
+    /* Segmented choice (the language): one pressed button. */
+    .cmcs-seg { display: inline-flex; flex: none; border: 1.5px solid var(--cmcs-border-strong); }
+    .cmcs-seg button {
+      appearance: none; border: 0; background: transparent; color: var(--cmcs-muted); cursor: pointer;
+      font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.4; padding: 2px 7px;
+    }
+    .cmcs-seg button + button { border-left: 1.5px solid var(--cmcs-border-strong); }
+    .cmcs-seg button:hover { color: var(--cmcs-text); }
+    .cmcs-seg button[aria-pressed="true"] { background: var(--cmcs-primary-bg); color: var(--cmcs-primary-text); cursor: default; }
+    .cmcs-seg--large button { font-size: 12px; font-weight: 600; letter-spacing: 0; padding: 4px 10px; }
     a.cmcs-btn:hover { text-decoration: none; }
     .cmcs-icon-btn {
       appearance: none; border: 0; background: transparent; color: var(--cmcs-disabled);

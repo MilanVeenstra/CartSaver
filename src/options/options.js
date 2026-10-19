@@ -7,22 +7,26 @@
   const style = document.createElement('style');
   style.textContent = ui.STYLES;
   document.head.prepend(style);
+  await CMCS.i18n.ready;
   CMCS.localize(document);
   $('logo').append(ui.logo(44));
-  document.documentElement.lang = chrome.i18n.getUILanguage();
+  const shownLang = CMCS.lang();
+  document.documentElement.lang = shownLang;
 
   // --- Settings --------------------------------------------------------------
 
-  const settings = await store.getSettings();
-  $('autoTrack').checked = settings.autoTrack;
-  $('showReminder').checked = settings.showReminder;
-  $('notify').checked = settings.notify;
-  $('awayChecks').checked = settings.awayChecks;
-  $('priceTrend').checked = settings.priceTrend;
-  $('psaEstimate').checked = settings.psaEstimate;
-  $('cloudSync').checked = settings.cloudSync;
-  $('pptApiKey').value = settings.pptApiKey || '';
-  $('delay').value = (settings.delayMs / 1000).toFixed(1);
+  function fillForm(settings) {
+    $('autoTrack').checked = settings.autoTrack;
+    $('showReminder').checked = settings.showReminder;
+    $('notify').checked = settings.notify;
+    $('awayChecks').checked = settings.awayChecks;
+    $('priceTrend').checked = settings.priceTrend;
+    $('psaEstimate').checked = settings.psaEstimate;
+    $('cloudSync').checked = settings.cloudSync;
+    $('pptApiKey').value = settings.pptApiKey || '';
+    $('delay').value = (settings.delayMs / 1000).toFixed(1);
+  }
+  fillForm(await store.getSettings());
 
   let savedTimer = null;
   async function save(patch) {
@@ -32,14 +36,49 @@
     savedTimer = setTimeout(() => ($('saved').textContent = ''), 1800);
   }
 
+  // Language: automatic (the browser's), Dutch or English. The page starts over in the new language.
+  function paintLanguage() {
+    for (const button of $('language').querySelectorAll('[data-lang]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.lang === CMCS.i18n.chosen()));
+    }
+  }
+  paintLanguage();
+  $('language').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-lang]');
+    if (button && button.dataset.lang !== CMCS.i18n.chosen()) save({ language: button.dataset.lang });
+  });
+  CMCS.i18n.onChange((lang) => (lang === shownLang ? paintLanguage() : location.reload()));
+
   $('autoTrack').addEventListener('change', (e) => save({ autoTrack: e.target.checked }));
   $('showReminder').addEventListener('change', (e) => save({ showReminder: e.target.checked }));
   $('notify').addEventListener('change', (e) => save({ notify: e.target.checked }));
   $('awayChecks').addEventListener('change', (e) => save({ awayChecks: e.target.checked }));
-  $('priceTrend').addEventListener('change', (e) => save({ priceTrend: e.target.checked }));
 
+  // The opt-in features each talk to one more website. Chrome asks you for it
+  // when you switch the feature on; switched off, the permission goes again.
+  const HOSTS = { trend: 'downloads.s3.cardmarket.com', psa: 'www.pokemonpricetracker.com' };
+  function optIn(box, origin, setting, statusEl) {
+    box.addEventListener('change', async (e) => {
+      const on = e.target.checked;
+      if (on) {
+        // Asked straight from the click: Chrome only asks during one.
+        const granted = await chrome.permissions.request({ origins: [origin] }).catch(() => false);
+        if (!granted) {
+          e.target.checked = false;
+          statusEl.textContent = t('permissionRefused');
+          return;
+        }
+      }
+      await save({ [setting]: on });
+      if (!on) chrome.permissions.remove({ origins: [origin] }).catch(() => {});
+    });
+  }
+  optIn($('priceTrend'), store.ORIGINS.trend, 'priceTrend', $('trendStatus'));
   // PSA values: the key is only kept here and sent to PokemonPriceTracker itself.
-  $('psaEstimate').addEventListener('change', (e) => save({ psaEstimate: e.target.checked }));
+  optIn($('psaEstimate'), store.ORIGINS.psa, 'psaEstimate', $('psaStatus'));
+  // On here (through sync, from another browser) but not allowed here yet.
+  $('trendGrant').addEventListener('click', () => chrome.permissions.request({ origins: [store.ORIGINS.trend] }).then(renderTrendStatus, () => {}));
+  $('psaGrant').addEventListener('click', () => chrome.permissions.request({ origins: [store.ORIGINS.psa] }).then(renderPsaStatus, () => {}));
   $('pptApiKey').addEventListener('change', (e) => {
     e.target.value = e.target.value.trim();
     save({ pptApiKey: e.target.value });
@@ -67,7 +106,7 @@
       $('syncStatus').textContent = current.cloudSync ? t('syncNotYet') : '';
       return;
     }
-    const when = new Date(status.at).toLocaleString(chrome.i18n.getUILanguage(), { dateStyle: 'short', timeStyle: 'short' });
+    const when = new Date(status.at).toLocaleString(CMCS.locale(), { dateStyle: 'short', timeStyle: 'short' });
     const kb = (status.bytes || 0) < 1024 ? '<1' : String(Math.round(status.bytes / 1024));
     $('syncStatus').textContent = status.error
       ? t('syncError', status.error)
@@ -82,9 +121,15 @@
   async function renderPsaStatus() {
     const current = await store.getSettings();
     const { status } = await store.getPsa();
+    const allowed = await store.hasOrigin(store.ORIGINS.psa);
     $('psaKeyBox').hidden = !current.psaEstimate;
+    $('psaGrant').hidden = !current.psaEstimate || allowed;
     if (!current.psaEstimate) {
       $('psaStatus').textContent = '';
+      return;
+    }
+    if (!allowed) {
+      $('psaStatus').textContent = t('permissionNeeded', HOSTS.psa);
       return;
     }
     if (!String(current.pptApiKey || '').trim()) {
@@ -92,11 +137,11 @@
       return;
     }
     if (!status || !status.at) return;
-    const when = new Date(status.at).toLocaleString(chrome.i18n.getUILanguage(), { dateStyle: 'short', timeStyle: 'short' });
+    const when = new Date(status.at).toLocaleString(CMCS.locale(), { dateStyle: 'short', timeStyle: 'short' });
     const errors = { key: 'psaErrorKey', limit: 'psaErrorLimit' };
     $('psaStatus').textContent = status.error
       ? t(errors[status.error] || 'psaErrorOther', status.errorDetail || status.error)
-      : [t('psaStatus', when, String(status.known || 0)), status.waiting ? t('psaStatusWaiting', String(status.waiting)) : null].filter(Boolean).join(' ');
+      : [CMCS.tn('psaStatus', status.known || 0, when, String(status.known || 0)), status.waiting ? t('psaStatusWaiting', String(status.waiting)) : null].filter(Boolean).join(' ');
   }
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && (changes[store.KEYS.psa] || changes[store.KEYS.settings])) renderPsaStatus();
@@ -106,17 +151,26 @@
   /** When the price guide was last read, or why not. */
   async function renderTrendStatus() {
     const { 'cmcs.prices': status } = await chrome.storage.local.get('cmcs.prices');
-    if (!status) {
+    const on = (await store.getSettings()).priceTrend;
+    const allowed = await store.hasOrigin(store.ORIGINS.trend);
+    $('trendGrant').hidden = !on || allowed;
+    if (on && !allowed) {
+      $('trendStatus').textContent = t('permissionNeeded', HOSTS.trend);
+      return;
+    }
+    if (!on || !status) {
       $('trendStatus').textContent = '';
       return;
     }
-    const when = new Date(status.at).toLocaleString(chrome.i18n.getUILanguage(), { dateStyle: 'short', timeStyle: 'short' });
+    const when = new Date(status.at).toLocaleString(CMCS.locale(), { dateStyle: 'short', timeStyle: 'short' });
     const cards = Object.values(status.games || {}).reduce((sum, n) => sum + n, 0);
-    $('trendStatus').textContent = status.error ? t('trendStatusError', status.error) : t('trendStatus', when, String(cards));
+    $('trendStatus').textContent = status.error ? t('trendStatusError', status.error) : CMCS.tn('trendStatus', cards, when, String(cards));
   }
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes['cmcs.prices']) renderTrendStatus();
+    if (area === 'local' && (changes['cmcs.prices'] || changes[store.KEYS.settings])) renderTrendStatus();
   });
+  chrome.permissions.onAdded.addListener(() => (renderTrendStatus(), renderPsaStatus()));
+  chrome.permissions.onRemoved.addListener(() => (renderTrendStatus(), renderPsaStatus()));
   renderTrendStatus();
   $('delay').addEventListener('change', (e) => {
     const seconds = Math.min(10, Math.max(0.5, parseFloat(e.target.value) || 1.2));
@@ -237,10 +291,18 @@
 
   $('clear').addEventListener('click', async () => {
     if (!confirm(t('clearConfirm'))) return;
-    await store.setItems({});
-    await store.setFavorites({});
-    await store.updateCarts(() => []);
-    await store.setJob(null);
+    const { language, cloudSync } = await store.getSettings();
+    // Everything Cart Saver keeps in this browser: articles, favourites, lists, your
+    // Cardmarket username, the API key, pictures and prices. The settings start
+    // over; only the language and the sync switch stay as they are.
+    const all = await chrome.storage.local.get(null);
+    await chrome.storage.local.remove(Object.keys(all).filter((key) => key.startsWith('cmcs.') && key !== store.KEYS.settings));
+    await chrome.storage.local.set({ [store.KEYS.settings]: { language, cloudSync } });
+    // And the copy in your browser sync, also when syncing is off here. Your
+    // other browsers that sync drop what came from it (they keep their own settings).
+    if (chrome.storage.sync) await chrome.storage.sync.clear().catch(() => {});
+    await chrome.permissions.remove({ origins: Object.values(store.ORIGINS) }).catch(() => {});
+    fillForm(await store.getSettings());
     $('dataMessage').textContent = t('cleared');
   });
 })();

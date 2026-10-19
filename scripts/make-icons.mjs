@@ -23,9 +23,12 @@ const MARK = `<g transform="rotate(14 13.5 7)"><rect x="10" y="0.5" width="7.5" 
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ deviceScaleFactor: 1 });
+// The 128 icon is also the Chrome Web Store icon: 96×96 artwork with 16 px of empty space around it.
+const PADDING = { 128: 16 };
 for (const size of [16, 32, 48, 128]) {
+  const pad = PADDING[size] || 0;
   await page.setContent(
-    `<html><body style="margin:0;background:transparent"><svg id="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" style="display:block">${MARK}</svg></body></html>`,
+    `<html><body style="margin:0;background:transparent"><div id="mark" style="width:${size}px;height:${size}px;padding:${pad}px;box-sizing:border-box"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size - 2 * pad}" height="${size - 2 * pad}" style="display:block">${MARK}</svg></div></body></html>`,
   );
   await page.locator('#mark').screenshot({ path: path.join(ROOT, 'icons', `icon${size}.png`), omitBackground: true });
   console.log(`icons/icon${size}.png`);

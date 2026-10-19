@@ -14,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { BROWSER, extensionWorker } from './browser.mjs';
+import { BROWSER, extensionWorker, extensionCopy } from './browser.mjs';
 import { createMockCardmarket, ARTICLES } from './mock-cardmarket.mjs';
 
 // Let context.route() also see the extension service worker's requests (the price guide).
@@ -107,12 +107,14 @@ async function closeResult(page) {
 
 before(async () => {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcs-profile-'));
+  // The price guide and PSA tests need their opt-in websites allowed (see permissions.test.mjs for asking).
+  const extension = extensionCopy(ROOT, { grantOptional: true });
   context = await chromium.launchPersistentContext(userDataDir, {
     ...BROWSER,
     headless: true,
     locale: 'nl-NL',
     viewport: { width: 1280, height: 860 },
-    args: [`--disable-extensions-except=${ROOT}`, `--load-extension=${ROOT}`, '--lang=nl'],
+    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--lang=nl'],
   });
   mock = createMockCardmarket();
   await context.route(`${CM}/**`, mock.route);
@@ -2170,6 +2172,32 @@ describe('Cardmarket Cart Saver', () => {
       await merge();
     });
 
+    it('the PokemonPriceTracker key stays in the browser it was typed into', async () => {
+      await sw.evaluate(() => chrome.storage.local.get('cmcs.settings').then(({ 'cmcs.settings': st }) => chrome.storage.local.set({ 'cmcs.settings': { ...st, pptApiKey: 'mine' } })));
+      await merge();
+      const s = (await remote()).s.v;
+      assert.equal(JSON.stringify(s).includes('mine'), false, 'not in the synced copy');
+      // An older version synced it: another browser's key is never taken over.
+      await elsewhere({ s: { u: Date.now(), v: { ...s, pptApiKey: 'theirs', delayMs: 2100 } } });
+      await waitFor(async () => (await storage())['cmcs.settings'].delayMs === 2100, 'taken');
+      assert.equal((await storage())['cmcs.settings'].pptApiKey, 'mine');
+      await sw.evaluate((delayMs) => chrome.storage.local.get('cmcs.settings').then(({ 'cmcs.settings': st }) => chrome.storage.local.set({ 'cmcs.settings': { ...st, delayMs, pptApiKey: '' } })), DELAY_MS);
+      await merge();
+    });
+
+    it('takes only Cardmarket links from the synced copy', async () => {
+      const id = '9500000001';
+      await elsewhere({
+        [`f.${id}`]: { u: Date.now(), v: { a: id, g: 'Magic', l: 'en', n: 'Vreemde link', u: 'javascript:alert(1)', su: 'https://evil.example/x', im: 'http://product-images.s3.cardmarket.com/x.jpg', fa: Date.now() } },
+      });
+      const fav = await waitFor(async () => (await favorites())[id], 'the favourite came over');
+      assert.equal(fav.productUrl, null);
+      assert.equal(fav.sellerUrl, null);
+      assert.equal(fav.imageUrl, null);
+      await sw.evaluate((id) => chrome.storage.local.get('cmcs.favorites').then(({ 'cmcs.favorites': f }) => (delete f[id], chrome.storage.local.set({ 'cmcs.favorites': f }))), id);
+      await merge();
+    });
+
     it('when the sync is full, what matters most goes first and nothing is thrown away', async () => {
       await sw.evaluate(async () => {
         const { 'cmcs.items': current } = await chrome.storage.local.get('cmcs.items');
@@ -2206,6 +2234,94 @@ describe('Cardmarket Cart Saver', () => {
       assert.equal(await merge(), null);
       assert.deepEqual(Object.keys(await remote()).sort(), Object.keys(before).sort());
       await setSync(true);
+    });
+  });
+
+  describe('Dutch or English, your choice', () => {
+    let cart;
+    const setLanguage = (language) =>
+      sw.evaluate(async (language) => {
+        const { 'cmcs.settings': settings = {} } = await chrome.storage.local.get('cmcs.settings');
+        await chrome.storage.local.set({ 'cmcs.settings': { ...settings, language } });
+      }, language);
+    const panelSays = (re) => async () => re.test(await widget(cart).innerText().catch(() => ''));
+
+    before(async () => {
+      await setLanguage('auto');
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.job': null }));
+      mock.state.cart = new Map([[BOG, 1]]);
+      cart = await context.newPage();
+      await cart.goto(`${CM}/en/Magic/ShoppingCart`);
+      await waitFor(panelSays(/in je mandje/), 'Dutch panel (the browser speaks Dutch)');
+    });
+    after(async () => {
+      await setLanguage('auto');
+      await cart.close();
+    });
+
+    it('switches the popup with NL | EN in its header', async () => {
+      const popup = await context.newPage();
+      await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+      await waitFor(() => popup.locator('#lang [data-lang="nl"][aria-pressed="true"]').isVisible(), 'NL pressed');
+      assert.equal(await popup.locator('#tab-cart').innerText(), 'Winkelmandje');
+      assert.equal(await popup.locator('#lang').getAttribute('aria-label'), 'Taal');
+
+      await popup.locator('#lang').getByRole('button', { name: 'EN' }).click();
+      await waitFor(async () => (await popup.locator('#tab-cart').innerText().catch(() => '')) === 'Cart', 'English popup');
+      assert.equal(await popup.locator('html').getAttribute('lang'), 'en');
+      assert.equal(await popup.locator('#lang [data-lang="en"]').getAttribute('aria-pressed'), 'true');
+      assert.equal((await storage())['cmcs.settings'].language, 'en');
+      await shot(popup, '30-popup-english');
+      await popup.close();
+    });
+
+    it('the panel on Cardmarket follows at once, without a page reload', async () => {
+      await cart.evaluate(() => (window.cmcsNoReload = true));
+      await waitFor(panelSays(/in your cart/), 'English panel');
+      assert.doesNotMatch(await widget(cart).innerText(), /mandje/);
+      await setLanguage('nl');
+      await waitFor(panelSays(/in je mandje/), 'Dutch again');
+      assert.equal(await cart.evaluate(() => window.cmcsNoReload), true, 'same page');
+    });
+
+    it('stars, the toolbar tooltip and new pages speak it too', async () => {
+      await setLanguage('en');
+      const product = await context.newPage();
+      await product.goto(SOL_RING_URL);
+      const star = product.locator(`#articleRow${SOL_KINGDOM} cmcs-fav button`);
+      await waitFor(async () => /favourite/.test((await star.getAttribute('title').catch(() => '')) || ''), 'English star');
+      await setLanguage('nl');
+      await waitFor(async () => /favoriet/.test((await star.getAttribute('title').catch(() => '')) || ''), 'Dutch star, same page');
+      await product.close();
+
+      await setLanguage('en');
+      await patchItems({ [BOG]: { status: 'missing', missingReason: 'emptied' } });
+      await waitFor(async () => /saved articles? not in your cart/.test(await sw.evaluate(() => chrome.action.getTitle({}))), 'English tooltip');
+      await setLanguage('nl');
+      await waitFor(async () => /niet in je mandje/.test(await sw.evaluate(() => chrome.action.getTitle({}))), 'Dutch tooltip');
+      await patchItems({ [BOG]: { status: 'in_cart', missingReason: null } });
+    });
+
+    it('the settings page offers Automatic, Nederlands and English', async () => {
+      await setLanguage('en');
+      const options = await context.newPage();
+      await options.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+      const title = () => options.locator('h2').first().innerText().catch(() => '');
+      await waitFor(async () => (await title()) === 'Settings', 'English settings');
+      assert.equal(await options.locator('#language [data-lang="en"]').getAttribute('aria-pressed'), 'true');
+
+      await options.getByRole('button', { name: 'Automatic' }).click();
+      await waitFor(async () => (await title()) === 'Instellingen', 'the browser language (Dutch)');
+      await waitFor(async () => (await options.locator('#language [data-lang="auto"]').getAttribute('aria-pressed').catch(() => '')) === 'true', 'Automatic pressed');
+      assert.equal((await storage())['cmcs.settings'].language, 'auto');
+
+      await options.getByRole('button', { name: 'English' }).click();
+      await waitFor(async () => (await title()) === 'Settings', 'English again');
+      await shot(options, '31-options-english');
+      await options.getByRole('button', { name: 'Nederlands' }).click();
+      await waitFor(async () => (await title()) === 'Instellingen', 'Dutch');
+      assert.equal((await storage())['cmcs.settings'].language, 'nl');
+      await options.close();
     });
   });
 
@@ -2296,5 +2412,29 @@ describe('Cardmarket Cart Saver', () => {
     await new Promise((r) => setTimeout(r, 2500));
     assert.equal((await items())[SOL_RING].status, 'in_cart');
     mock.state.loggedIn = true;
+  });
+
+  // Last: it wipes everything.
+  it('"Delete everything" leaves nothing behind, here or in the sync', async () => {
+    await sw.evaluate(async () => {
+      const { 'cmcs.settings': settings } = await chrome.storage.local.get('cmcs.settings');
+      await chrome.storage.local.set({
+        'cmcs.settings': { ...settings, pptApiKey: 'secret', notify: false, language: 'nl', cloudSync: true },
+        'cmcs.meta': { account: 'someone' },
+      });
+      await chrome.storage.sync.set({ s: { u: Date.now(), v: { notify: false } } });
+    });
+    const options = await context.newPage();
+    await options.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await waitFor(() => options.locator('#clear').isVisible(), 'settings page');
+    options.once('dialog', (dialog) => dialog.accept());
+    await options.locator('#clear').click();
+    await waitFor(async () => (await options.locator('#dataMessage').innerText()) === 'Alles is gewist.', 'said so');
+    const left = await storage();
+    assert.deepEqual(Object.keys(left).filter((key) => key.startsWith('cmcs.')), ['cmcs.settings']);
+    assert.deepEqual(left['cmcs.settings'], { language: 'nl', cloudSync: true }, 'settings start over, except language and sync');
+    assert.equal(await options.locator('#notify').isChecked(), true, 'the form shows the defaults');
+    assert.deepEqual(Object.keys(await sw.evaluate(() => chrome.storage.sync.get(null))).filter((key) => key !== 's'), [], 'nothing left in the sync');
+    await options.close();
   });
 });

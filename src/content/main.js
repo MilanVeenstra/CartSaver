@@ -13,9 +13,11 @@
 (async function main() {
   'use strict';
 
-  const { cm, store } = globalThis.CMCS;
+  const { cm, store, i18n } = globalThis.CMCS;
   const loc = cm.parseLocation(location.href);
   if (!loc.lang || !loc.game) return;
+  // The texts in the language from the settings, before anything shows.
+  await i18n.ready;
 
   const HEADER_DEBOUNCE_MS = 1500;
   const USER_REMOVAL_TTL_MS = 10 * 60 * 1000;

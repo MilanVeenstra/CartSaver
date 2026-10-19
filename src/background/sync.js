@@ -54,8 +54,24 @@
   const ITEM_FIELDS = [...ARTICLE, 'amount', 'wantedAmount', 'status', 'missingReason', 'missingSince', 'ignoredAt', 'viaFavorite', 'firstSavedAt', 'replaces'];
   const FAVORITE_FIELDS = [...ARTICLE, 'available', 'favoritedAt', 'unavailable', 'unavailableMessage'];
   const LIST_ITEM_FIELDS = [...ARTICLE, 'amount', 'wantedAmount'];
-  /** Settings that belong to one browser. */
-  const LOCAL_SETTINGS = new Set(['cloudSync']);
+  /**
+   * Settings that belong to one browser. The PokemonPriceTracker key is a
+   * password of sorts: it stays in the browser it was typed into.
+   */
+  const LOCAL_SETTINGS = new Set(['cloudSync', 'pptApiKey']);
+
+  /** Links from the synced copy: only to Cardmarket, over https (anything else is dropped). */
+  function safeUrl(field, value) {
+    if (typeof value !== 'string') return null;
+    try {
+      const u = new URL(value);
+      if (u.protocol !== 'https:') return null;
+      if (field === 'imageUrl') return /(^|\.)cardmarket\.com$/.test(u.hostname) ? value : null;
+      return u.hostname === 'www.cardmarket.com' ? value : null;
+    } catch {
+      return null;
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Records
@@ -100,8 +116,9 @@
         out[field] = field === 'foil' || field === 'viaFavorite' || field === 'unavailable' ? false : field === 'extras' ? [] : null;
         continue;
       }
-      if ((field === 'productUrl' || field === 'sellerUrl') && typeof value === 'string' && value.startsWith('/')) out[field] = CM + value;
-      else if (field === 'imageUrl' && typeof value === 'string' && value.startsWith('/')) out[field] = IMG + value;
+      if ((field === 'productUrl' || field === 'sellerUrl') && typeof value === 'string' && value.startsWith('/')) out[field] = safeUrl(field, CM + value);
+      else if (field === 'imageUrl' && typeof value === 'string' && value.startsWith('/')) out[field] = safeUrl(field, IMG + value);
+      else if (field === 'productUrl' || field === 'sellerUrl' || field === 'imageUrl') out[field] = safeUrl(field, value);
       else out[field] = value;
     }
     return out;
@@ -236,7 +253,9 @@
       await chrome.storage.local.get(store.KEYS.settings).then(async (got) => {
         const current = got[store.KEYS.settings] || {};
         const mine = Object.fromEntries(Object.entries(current).filter(([key]) => LOCAL_SETTINGS.has(key)));
-        await chrome.storage.local.set({ [store.KEYS.settings]: { ...settingsValue, ...mine } });
+        // An older version synced every setting: never take another browser's key.
+        const theirs = Object.fromEntries(Object.entries(settingsValue).filter(([key]) => !LOCAL_SETTINGS.has(key)));
+        await chrome.storage.local.set({ [store.KEYS.settings]: { ...theirs, ...mine } });
       });
     }
   }

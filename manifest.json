@@ -3,7 +3,8 @@
   "name": "__MSG_extName__",
   "short_name": "Cart Saver",
   "description": "__MSG_extDescription__",
-  "version": "1.6.5",
+  "homepage_url": "https://github.com/MilanVeenstra/CartSaver",
+  "version": "1.6.6",
   "default_locale": "en",
   "icons": {
     "16": "icons/icon16.png",
@@ -21,7 +22,9 @@
   ],
   "host_permissions": [
     "https://www.cardmarket.com/*",
-    "https://product-images.s3.cardmarket.com/*",
+    "https://product-images.s3.cardmarket.com/*"
+  ],
+  "optional_host_permissions": [
     "https://downloads.s3.cardmarket.com/*",
     "https://www.pokemonpricetracker.com/*"
   ],

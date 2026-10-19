@@ -18,6 +18,17 @@
 
       <section class="card">
         <h2 data-i18n="settingsTitle"></h2>
+        <div class="row row--input row--static row--language">
+          <span>
+            <strong id="languageTitle" data-i18n="settingLanguage"></strong>
+            <span class="cmcs-muted" data-i18n="settingLanguageHelp"></span>
+          </span>
+          <div id="language" class="cmcs-seg cmcs-seg--large" role="group" aria-labelledby="languageTitle">
+            <button type="button" data-lang="auto" data-i18n="languageAuto"></button>
+            <button type="button" data-lang="nl" lang="nl">Nederlands</button>
+            <button type="button" data-lang="en" lang="en">English</button>
+          </div>
+        </div>
         <label class="row">
           <input type="checkbox" id="autoTrack" />
           <span>
@@ -46,14 +57,17 @@
             <span class="cmcs-muted" data-i18n="settingAwayHelp"></span>
           </span>
         </label>
-        <label class="row">
-          <input type="checkbox" id="priceTrend" />
-          <span>
-            <strong data-i18n="settingTrend"></strong>
-            <span class="cmcs-muted" data-i18n="settingTrendHelp"></span>
-            <span class="cmcs-muted" id="trendStatus"></span>
-          </span>
-        </label>
+        <div class="row row--block">
+          <label class="row-check">
+            <input type="checkbox" id="priceTrend" />
+            <span>
+              <strong data-i18n="settingTrend"></strong>
+              <span class="cmcs-muted" data-i18n="settingTrendHelp"></span>
+            </span>
+          </label>
+          <span class="cmcs-muted psa-note" id="trendStatus" aria-live="polite"></span>
+          <button type="button" class="cmcs-btn cmcs-btn--small cmcs-btn--ghost grant" id="trendGrant" data-i18n="permissionGrant" hidden></button>
+        </div>
         <div class="row row--block">
           <label class="row-check">
             <input type="checkbox" id="psaEstimate" />
@@ -71,6 +85,7 @@
             <a href="https://www.pokemonpricetracker.com/free-pokemon-card-price-api" target="_blank" rel="noopener" data-i18n="settingPsaGetKey"></a>
           </span>
           <span class="cmcs-muted psa-note" id="psaStatus" aria-live="polite"></span>
+          <button type="button" class="cmcs-btn cmcs-btn--small cmcs-btn--ghost grant" id="psaGrant" data-i18n="permissionGrant" hidden></button>
         </div>
         <label class="row row--input">
           <span>

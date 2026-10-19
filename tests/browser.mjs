@@ -2,6 +2,9 @@
  * Shared by the test files: which browser to start, and how to reach the
  * extension's service worker once Chrome has really started it.
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 /** CHROMIUM_PATH: use a Chromium / Chrome for Testing already on disk instead of Playwright's own. */
 export const BROWSER = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chromium' };
@@ -28,4 +31,25 @@ export async function extensionWorker(context) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error('The extension service worker did not start');
+}
+
+/**
+ * A copy of the extension in a temporary folder, to load in a test browser.
+ * `grantOptional`: the opt-in websites (optional_host_permissions) come
+ * already allowed, as if the user said yes when Chrome asked; Chrome's own
+ * question cannot be answered from a test.
+ */
+export function extensionCopy(root, { grantOptional = false } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcs-ext-'));
+  for (const entry of ['manifest.json', 'src', '_locales', 'icons']) {
+    fs.cpSync(path.join(root, entry), path.join(dir, entry), { recursive: true });
+  }
+  if (grantOptional) {
+    const file = path.join(dir, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    manifest.host_permissions = [...manifest.host_permissions, ...(manifest.optional_host_permissions || [])];
+    delete manifest.optional_host_permissions;
+    fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+  return dir;
 }

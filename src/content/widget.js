@@ -141,6 +141,8 @@
       if (Object.keys(changes).some((key) => watched.includes(key))) refresh();
     });
     watchForUpdate();
+    // Another language picked: everything again, in that language.
+    CMCS.i18n.onChange(() => refresh());
     // "Find a replacement" in the popup opens the cart page at #cmcs-replace=<article>.
     window.addEventListener('hashchange', replaceFromHash);
     return refresh().then(replaceFromHash);
@@ -152,7 +154,8 @@
    * ask for a page reload. Texts are read up front: chrome.i18n is gone too.
    */
   function watchForUpdate() {
-    const label = t('updatedPill');
+    let label = t('updatedPill');
+    CMCS.i18n.onChange(() => (label = t('updatedPill')));
     const timer = setInterval(() => {
       let alive = false;
       try {
@@ -996,7 +999,7 @@
     const at = typeof state.meta.cartExpiry === 'number' ? state.meta.cartExpiry : null;
     if (!at || at <= Date.now()) return null;
     const minutes = Math.max(1, Math.round((at - Date.now()) / 60000));
-    const time = new Date(at).toLocaleTimeString(chrome.i18n.getUILanguage(), { hour: '2-digit', minute: '2-digit' });
+    const time = new Date(at).toLocaleTimeString(CMCS.locale(), { hour: '2-digit', minute: '2-digit' });
     return h('p', { class: `cmcs-expiry ${minutes <= 10 ? 'cmcs-expiry--soon' : ''}` }, t('expiryLine', time, String(minutes)));
   }
 

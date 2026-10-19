@@ -81,13 +81,13 @@
     "message": "Alles wissen"
   },
   "clearConfirm": {
-    "message": "Alle opgeslagen artikelen, favorieten en bewaarde lijsten wissen? Met synchroniseren aan gebeurt dat ook in je andere browsers. Dit kan niet ongedaan worden gemaakt."
+    "message": "Alles wissen wat Cart Saver bewaart? Je opgeslagen artikelen, favorieten, lijsten, instellingen en API-sleutel gaan weg, ook uit de sync van je browser-account en dus uit je andere browsers. Dit kan niet ongedaan worden gemaakt."
   },
   "clearUnavailable": {
     "message": "Opschonen"
   },
   "cleared": {
-    "message": "Alle opgeslagen artikelen, favorieten en bewaarde lijsten zijn gewist."
+    "message": "Alles is gewist."
   },
   "close": {
     "message": "Sluiten"
@@ -204,7 +204,7 @@
     "message": "Onthoudt wat je in je Cardmarket-winkelmandje legt en zet het met één klik terug nadat je mandje is geleegd."
   },
   "extName": {
-    "message": "Cardmarket Cart Saver"
+    "message": "Cart Saver for Cardmarket"
   },
   "favAdd": {
     "message": "Bewaar als favoriet"
@@ -329,6 +329,12 @@
   "jobCancelled": {
     "message": "Gestopt voordat alle artikelen waren teruggezet."
   },
+  "languageAuto": {
+    "message": "Automatisch"
+  },
+  "languageLabel": {
+    "message": "Taal"
+  },
   "listAllInCart": {
     "message": "Alles van deze lijst zit al in je mandje."
   },
@@ -413,6 +419,15 @@
   "partialNote": {
     "message": "$1 van $2 in je mandje"
   },
+  "permissionGrant": {
+    "message": "Toestemming geven"
+  },
+  "permissionNeeded": {
+    "message": "Cart Saver mag $1 in deze browser nog niet bereiken."
+  },
+  "permissionRefused": {
+    "message": "Zonder toestemming voor die website kan dit niet aan."
+  },
   "pillAttention": {
     "message": "Cart Saver · $1 te bekijken"
   },
@@ -426,7 +441,7 @@
     "message": "Prijs $1 hoger (was $2)"
   },
   "privacyNote": {
-    "message": "Alles wordt lokaal in je browser bewaard. Cart Saver praat alleen met Cardmarket (de site en de plaatjes), via je eigen sessie, en alleen als je de PSA-schatting aanzet ook met PokemonPriceTracker."
+    "message": "Alles wordt in je eigen browser bewaard, en met synchroniseren aan in de sync van je eigen browser-account. Cart Saver praat alleen met Cardmarket (de site, de plaatjes en, als je het aanzet, de prijsgids), via je eigen sessie, en alleen als je de PSA-schatting aanzet ook met PokemonPriceTracker."
   },
   "progressCount": {
     "message": "$1 van $2"
@@ -466,6 +481,9 @@
   },
   "psaStatusOff": {
     "message": "Zet het eerst aan en vul een sleutel in."
+  },
+  "psaStatusOne": {
+    "message": "Laatst bijgewerkt: $1 · 1 kaart met PSA-prijzen."
   },
   "psaStatusWaiting": {
     "message": "$1 wachten op de volgende ronde (dagelijkse limiet)."
@@ -653,6 +671,12 @@
   "settingDelayHelp": {
     "message": "Artikelen worden één voor één teruggezet. Een langere pauze is vriendelijker voor Cardmarket."
   },
+  "settingLanguage": {
+    "message": "Taal"
+  },
+  "settingLanguageHelp": {
+    "message": "Waarin Cart Saver met je praat. Automatisch volgt de taal van je browser."
+  },
   "settingNotify": {
     "message": "Meldingen"
   },
@@ -687,7 +711,7 @@
     "message": "Synchroniseren via je browser-account"
   },
   "settingSyncHelp": {
-    "message": "Je favorieten, lijsten, opgeslagen artikelen en instellingen zijn in al je browsers hetzelfde, via de sync van je eigen browser (in Chrome: je Google-account; zet daar \"Extensies\" aan bij Synchroniseren). Ieder heeft zo zijn eigen gegevens; niets gaat naar ons. Plaatjes en prijzen haalt elke browser zelf op."
+    "message": "Je favorieten, lijsten, opgeslagen artikelen en instellingen zijn in al je browsers hetzelfde, via de sync van je eigen browser (in Chrome: je Google-account; zet daar \"Extensies\" aan bij Synchroniseren). Ieder heeft zo zijn eigen gegevens; niets gaat naar ons. Plaatjes, prijzen en je API-sleutel blijven in elke browser apart."
   },
   "settingTrend": {
     "message": "Prijzen vergelijken met de trend"
@@ -823,6 +847,9 @@
   },
   "trendStatusError": {
     "message": "Prijsgids kon niet worden gelezen: $1"
+  },
+  "trendStatusOne": {
+    "message": "Laatst gelezen: $1 (1 artikel)."
   },
   "undo": {
     "message": "Ongedaan maken"

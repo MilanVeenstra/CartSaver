@@ -16,6 +16,24 @@
 
   const CMCS = (root.CMCS = root.CMCS || {});
 
+  /**
+   * Websites only the opt-in features talk to. They are asked for when you
+   * switch the feature on, so a new install only asks for Cardmarket.
+   */
+  const ORIGINS = {
+    trend: 'https://downloads.s3.cardmarket.com/*',
+    psa: 'https://www.pokemonpricetracker.com/*',
+  };
+
+  /** May the extension reach `origin` (one of ORIGINS)? */
+  async function hasOrigin(origin) {
+    try {
+      return await chrome.permissions.contains({ origins: [origin] });
+    } catch {
+      return false;
+    }
+  }
+
   const KEYS = {
     items: 'cmcs.items',
     meta: 'cmcs.meta',
@@ -68,10 +86,12 @@
     priceTrend: false,
     /** Show an estimated PSA value for Pokémon cards (needs a PokemonPriceTracker API key). */
     psaEstimate: false,
-    /** Your own PokemonPriceTracker API key; it never leaves this browser except to that API (and your own browser sync). */
+    /** Your own PokemonPriceTracker API key; it never leaves this browser except to that API (not even through sync). */
     pptApiKey: '',
     /** Keep favourites, lists, saved articles and settings the same in all your browsers (your own browser sync). */
     cloudSync: true,
+    /** The language Cart Saver speaks: 'auto' (the browser's), 'nl' or 'en'. */
+    language: 'auto',
   };
 
   /**
@@ -475,6 +495,8 @@
   const store = {
     KEYS,
     STATUS,
+    ORIGINS,
+    hasOrigin,
     REASON,
     DEFAULT_SETTINGS,
     JOB_STALE_MS,

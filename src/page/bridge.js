@@ -3,6 +3,9 @@
  * www.cardmarket.com. It has no extension APIs and sends nothing anywhere
  * except to the site itself. Two jobs:
  *
+ * Only requests to www.cardmarket.com itself are looked at; requests to any
+ * other server pass untouched. Nothing is stored: the token lives in memory.
+ *
  * 1. Perform a same-origin request on behalf of the content script, so it
  *    leaves from the page exactly like the site's own buttons do. Cardmarket
  *    does not always answer requests from an extension's isolated world the
@@ -202,6 +205,15 @@
 
   // --- Watching the site's requests --------------------------------------------------
 
+  /** The site's own requests only: anything to another server is none of our business. */
+  function ownSite(url) {
+    try {
+      return new URL(String(url), location.href).origin === ORIGIN;
+    } catch {
+      return false;
+    }
+  }
+
   const xhrOpen = XMLHttpRequest.prototype.open;
   const xhrSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
@@ -209,6 +221,7 @@
     return xhrOpen.call(this, method, url, ...rest);
   };
   XMLHttpRequest.prototype.send = function (body) {
+    if (!ownSite(this.__cmcsUrl)) return xhrSend.call(this, body);
     inspect(this.__cmcsUrl, body);
     try {
       const targets = removalTargets(this.__cmcsUrl, body);
@@ -223,7 +236,8 @@
     return xhrSend.call(this, body);
   };
   window.fetch = function (input, init) {
-    const url = typeof input === 'string' ? input : input && input.url;
+    const url = typeof input === 'string' ? input : input && (input.url || input.href);
+    if (!ownSite(url)) return nativeFetch(input, init);
     inspect(url, init && init.body);
     const result = nativeFetch(input, init);
     try {

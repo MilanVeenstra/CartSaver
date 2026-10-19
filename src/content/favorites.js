@@ -44,9 +44,9 @@
   /** articleId → star buttons on this page (cart rows can appear twice). */
   const stars = new Map();
 
-  function paint(button, articleId) {
+  function paint(button, articleId, { force = false } = {}) {
     const on = Boolean(favorites[articleId]);
-    if (button.getAttribute('aria-pressed') === String(on)) return;
+    if (!force && button.getAttribute('aria-pressed') === String(on)) return;
     button.setAttribute('aria-pressed', String(on));
     const label = t(on ? 'favRemove' : 'favAdd');
     button.title = label;
@@ -198,10 +198,10 @@
     });
   }
 
-  function repaintAll() {
+  function repaintAll({ force = false } = {}) {
     for (const [articleId, buttons] of stars) {
       for (const button of buttons) {
-        if (button.isConnected) paint(button, articleId);
+        if (button.isConnected) paint(button, articleId, { force });
         else buttons.delete(button);
       }
     }
@@ -215,6 +215,8 @@
       favorites = changes[store.KEYS.favorites].newValue || {};
       repaintAll();
     });
+    // Another language: the same stars, new words.
+    CMCS.i18n.onChange(() => repaintAll({ force: true }));
 
     await refreshSeen(decorate());
     focusFromHash();
