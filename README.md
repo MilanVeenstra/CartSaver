@@ -187,6 +187,11 @@ CHROMIUM_PATH=/path/to/chrome npm test   # a Chromium that is already on your co
 npm run package                   # the Chrome Web Store upload (dist/), see docs/release.md
 ```
 
+**Releases.** Every push to `main` runs the tests on GitHub Actions. A push with a
+higher `version` in `manifest.json` also goes to the Chrome Web Store for review
+and becomes a GitHub release with the ZIP (`.github/workflows/release.yml`,
+setup in [docs/release.md](docs/release.md#6a-automatisch-publiceren-github-actions)).
+
 More background: [research](docs/RESEARCH.md),
 [functional requirements](docs/REQUIREMENTS.md),
 [analysis of the cart saver](docs/CART-SAVER-ANALYSIS.md),

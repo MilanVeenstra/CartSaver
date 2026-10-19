@@ -95,7 +95,7 @@ nemen je andere browsers het daarna over.
 
 | Controle | Resultaat |
 |---|---|
-| Testsuite (`npm test`) | 122/123 groen, zie §7 |
+| Testsuite (`npm test`) | 132/132 groen, ook in GitHub Actions bij elke push |
 | Vertalingen | Test: dezelfde sleutels in beide talen, dezelfde `$1…$9`, geen lege of onvertaalde teksten, en elke sleutel die de code gebruikt bestaat |
 | Optionele toestemmingen | Test met het echte manifest: een verse installatie mag alleen Cardmarket bereiken. Staat een functie via de sync aan zonder toestemming, dan gaat er geen verzoek de deur uit en vraagt de instellingenpagina erom. |
 | Externe of dynamische code | Geen `eval`, `new Function`, timers met tekst of externe scripts |
@@ -236,17 +236,78 @@ testgegevens.
 
 - Een update gaat opnieuw door de beoordeling. Terugdraaien kan alleen met
   een nieuwe, ook weer beoordeelde versie.
-- Bij elke release: `manifest.json`-versie ophogen, `npm test`,
-  `npm run package`, de digest hier noteren, uploaden.
+- Nieuwe versies gaan automatisch naar de Store, zie §6a. Met de hand kan
+  het nog steeds: `manifest.json`-versie ophogen, `npm test`,
+  `npm run package`, uploaden.
 - Ondersteuning via GitHub Issues.
+
+## 6a. Automatisch publiceren (GitHub Actions)
+
+`.github/workflows/release.yml` doet bij elke push naar `main`:
+
+1. **Alle tests** draaien (`npm test`) en het pakket bouwen. Rood is stop.
+2. **Is de versie in `manifest.json` nieuw?** Nieuw betekent: er is nog
+   geen git-tag `v<versie>`. Dan bouwt hij de ZIP, uploadt die naar de Store
+   en dient hem in voor review (`scripts/publish.mjs`, Chrome Web Store
+   API v2).
+3. **GitHub-release:** daarna maakt hij een release `v<versie>` met de ZIP
+   en de commits sinds de vorige release.
+
+| Situatie | Wat er gebeurt |
+|---|---|
+| Push met een hoger versienummer | Tests, upload, indienen voor review, GitHub-release |
+| Push zonder nieuw versienummer | Alleen tests. Veranderde de extensie toch, dan staat er een waarschuwing in de run. |
+| Er ligt nog een versie in review | De nieuwe versie wacht. Elke ochtend probeert de workflow het opnieuw en dient hem in zodra de vorige review klaar is. |
+| Een versie is afgewezen | De run wordt rood met de melding. Je krijgt ook een mail. Repareren, versie ophogen, pushen. |
+| De geheimen zijn nog niet ingesteld | Alleen tests. Er wordt niets geüpload. |
+
+Na de review zet Google de versie zelf live. Gebruikers krijgen de update
+vanzelf, meestal binnen een paar uur.
+
+### Eenmalig instellen
+
+Doe dit **na je eerste handmatige indiening**. De Store laat de API pas
+publiceren als je het item één keer zelf hebt gepubliceerd.
+
+1. **Google Cloud** ([console.cloud.google.com](https://console.cloud.google.com)):
+   - Maak een project aan, bijvoorbeeld "cart-saver-release".
+   - Ga naar *APIs en services* → *Bibliotheek*, zoek **Chrome Web Store
+     API** en klik op *Inschakelen*.
+2. **Service-account:** *IAM en beheer* → *Service-accounts* →
+   *Service-account maken*, bijvoorbeeld "release". Rollen zijn niet nodig.
+   Open het account en ga naar *Sleutels* → *Sleutel toevoegen* → *Nieuwe
+   sleutel* → **JSON**. Er wordt een bestand gedownload. Bewaar dat
+   **niet** in de projectmap en stuur het naar niemand, ook niet naar mij.
+3. **Developer Dashboard** → *Account*: voeg het e-mailadres van het
+   service-account toe (eindigt op `iam.gserviceaccount.com`) bij de
+   service-accounts voor API-toegang. Noteer daar ook je **publisher-ID**.
+   Die staat ook in de adresbalk van het dashboard:
+   `…/devconsole/<publisher-ID>/…`.
+4. **Item-ID:** de 32 letters van de extensie (a–p), te zien bij het item in
+   het dashboard en in de Store-link.
+5. **GitHub** → repository → *Settings* → *Secrets and variables* →
+   *Actions* → *New repository secret*. Maak er drie:
+   - `CWS_SERVICE_ACCOUNT`: de hele inhoud van het JSON-bestand.
+   - `CWS_PUBLISHER_ID`: het publisher-ID.
+   - `CWS_ITEM_ID`: het item-ID.
+
+   Verwijder daarna het JSON-bestand van je computer. Is het ooit
+   uitgelekt, verwijder dan de sleutel in Google Cloud en maak een nieuwe.
+6. **Proberen:** GitHub → *Actions* → *Test and release* → *Run workflow*.
+   Staat de huidige versie al in de Store, dan meldt de run "already
+   submitted" of "already live" en maakt hij de GitHub-release.
+
+De geheimen zijn alleen zichtbaar voor de release-stap op `main`, niet voor
+pull requests of forks. Het script gebruikt geen pakketten van anderen:
+alleen Node en de officiële API van Google.
 
 ## 7. Deze versie
 
 - **Bestand:** `dist/cart-saver-1.6.6.zip` (28 bestanden, ~135 KB)
 - **SHA-256:** `fc0c61aa6295298dfd74ac33400b0406e70529da29c3324a8fbb70b9da7304d1`
-- **Testsuite:** 122 van 123 groen. De enige fout heeft het echte
-  cardmarket.com nodig, dat vanuit de ontwikkelomgeving geblokkeerd is. Hij
-  faalde ook al in eerdere versies.
+- **Testsuite:** 132 van 132 groen. De testbrowser kan het echte
+  cardmarket.com nooit bereiken (`OFFLINE_ARGS` in `tests/browser.mjs`), dus
+  de uitkomst is overal hetzelfde: lokaal, hier en in GitHub Actions.
 - **Exacte uploadmap** (`dist/extension/`) geladen in Chromium: mandje wordt
   opgeslagen, paneel, popup en instellingen werken, NL/EN wisselt, de
   optionele websites zijn niet toegestaan bij installeren, geen fouten.

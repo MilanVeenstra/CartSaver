@@ -6,6 +6,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+/**
+ * The test browser never reaches the real Cardmarket (or PokemonPriceTracker):
+ * whatever the mocks do not answer fails the same way everywhere, on a laptop,
+ * in this sandbox and in GitHub Actions.
+ */
+export const OFFLINE_ARGS = ['--host-resolver-rules=MAP *.cardmarket.com ~NOTFOUND, MAP *.pokemonpricetracker.com ~NOTFOUND'];
+
 /** CHROMIUM_PATH: use a Chromium / Chrome for Testing already on disk instead of Playwright's own. */
 export const BROWSER = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chromium' };
 

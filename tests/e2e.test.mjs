@@ -14,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { BROWSER, extensionWorker, extensionCopy } from './browser.mjs';
+import { BROWSER, OFFLINE_ARGS, extensionWorker, extensionCopy } from './browser.mjs';
 import { createMockCardmarket, ARTICLES } from './mock-cardmarket.mjs';
 
 // Let context.route() also see the extension service worker's requests (the price guide).
@@ -114,7 +114,7 @@ before(async () => {
     headless: true,
     locale: 'nl-NL',
     viewport: { width: 1280, height: 860 },
-    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--lang=nl'],
+    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--lang=nl', ...OFFLINE_ARGS],
   });
   mock = createMockCardmarket();
   await context.route(`${CM}/**`, mock.route);
@@ -1683,8 +1683,10 @@ describe('Cardmarket Cart Saver', () => {
       const opened = context.waitForEvent('page');
       await popup.locator(`#list [data-article-id="${SOL_RING}"]`).getByRole('button', { name: 'Vervanging zoeken' }).click();
       const tab = await opened;
-      await tab.waitForLoadState();
-      assert.match(tab.url(), new RegExp(`/ShoppingCart#cmcs-replace=${SOL_RING}$`));
+      // The first load of a tab the extension opens slips past the mock (and fails,
+      // offline): ask Chrome which page the tab was opened for, then load it again.
+      const wanted = new RegExp(`/ShoppingCart#cmcs-replace=${SOL_RING}$`);
+      await waitFor(async () => (await sw.evaluate(() => chrome.tabs.query({}))).some((t) => wanted.test(t.pendingUrl || t.url || '')), 'the cart page with the replacement');
       await tab.goto(`${CM}/en/Magic/ShoppingCart#cmcs-replace=${SOL_RING}`);
       await waitFor(async () => (await widget(tab).locator('.cmcs-replace .cmcs-item').count()) > 0, 'suggestions shown');
       assert.match(await widget(tab).locator('.cmcs-replace').innerText(), /Kärtchen-Laden/);

@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { BROWSER, extensionWorker, extensionCopy } from './browser.mjs';
+import { BROWSER, OFFLINE_ARGS, extensionWorker, extensionCopy } from './browser.mjs';
 import { createMockCardmarket } from './mock-cardmarket.mjs';
 
 process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
@@ -41,7 +41,7 @@ before(async () => {
     ...BROWSER,
     headless: true,
     locale: 'nl-NL',
-    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--lang=nl'],
+    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--lang=nl', ...OFFLINE_ARGS],
   });
   await context.route('https://www.cardmarket.com/**', createMockCardmarket().route);
   await context.route('https://www.pokemonpricetracker.com/**', (r) => ((hits.psa += 1), r.fulfill({ status: 200, contentType: 'application/json', body: '{"data":[]}' })));

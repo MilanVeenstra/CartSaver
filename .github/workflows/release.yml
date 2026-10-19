@@ -1,0 +1,100 @@
+# Every push to main runs all tests. When manifest.json has a version that was
+# never released (no git tag v<version> yet), the same run builds the ZIP,
+# uploads it to the Chrome Web Store, submits it for review and makes a GitHub
+# release with the ZIP. Setup (once): docs/release.md, "Automatisch publiceren".
+name: Test and release
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Daily: a version that had to wait for an earlier review goes up once that review is done.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Tests
+        run: npm test
+        env:
+          # The tests read the extension in Dutch.
+          LANGUAGE: nl
+      - name: Package
+        run: npm run package
+
+  release:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Which version
+        id: version
+        run: |
+          version="$(node -p "require('./manifest.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            if [ -n "$(git diff --name-only "v$version" HEAD -- manifest.json _locales icons src)" ]; then
+              echo "::warning::The extension changed since v$version, but the version in manifest.json did not: nothing goes to the store. Raise \"version\" to release."
+            else
+              echo "Version $version is out and nothing in the extension changed since."
+            fi
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+            echo "New version: $version"
+          fi
+
+      - name: Package
+        if: steps.version.outputs.new == 'true'
+        run: bash scripts/package.sh
+
+      - name: Upload to the Chrome Web Store and submit for review
+        id: store
+        if: steps.version.outputs.new == 'true'
+        env:
+          CWS_SERVICE_ACCOUNT: ${{ secrets.CWS_SERVICE_ACCOUNT }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          CWS_ITEM_ID: ${{ secrets.CWS_ITEM_ID }}
+        run: node scripts/publish.mjs "dist/cart-saver-${{ steps.version.outputs.version }}.zip"
+
+      - name: GitHub release
+        if: steps.store.outputs.result == 'submitted' || steps.store.outputs.result == 'done'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          previous="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          {
+            echo "Submitted to the Chrome Web Store for review. It reaches users once Google approves it."
+            echo
+            echo "Changes:"
+            git log --no-merges --format='- %s' ${previous:+"$previous"..}HEAD | head -40
+          } > notes.md
+          gh release create "v$VERSION" "dist/cart-saver-$VERSION.zip" --target "$GITHUB_SHA" --title "Cart Saver $VERSION" --notes-file notes.md

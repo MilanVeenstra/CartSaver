@@ -6,3 +6,8 @@ build-id.txt
 
 # Private signing keys never go in the repository.
 *.pem
+
+# Google service account keys (the store pipeline) belong in GitHub secrets, never here.
+*service-account*.json
+*serviceaccount*.json
+cws-*.json

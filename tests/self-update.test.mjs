@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { BROWSER, extensionWorker } from './browser.mjs';
+import { BROWSER, OFFLINE_ARGS, extensionWorker } from './browser.mjs';
 import { createMockCardmarket } from './mock-cardmarket.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -50,7 +50,7 @@ before(async () => {
     ...BROWSER,
     headless: true,
     locale: 'nl-NL',
-    args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`, '--lang=nl'],
+    args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`, '--lang=nl', ...OFFLINE_ARGS],
   });
   await context.route(`${CM}/**`, createMockCardmarket().route);
   sw = await extensionWorker(context);
