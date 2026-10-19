@@ -164,17 +164,19 @@
   async function refresh() {
     if (orphaned) return;
     const seq = (refreshSeq += 1);
-    const [items, favorites, job, settings, meta, carts] = await Promise.all([
+    const [items, favorites, job, settings, meta, carts, psa] = await Promise.all([
       store.getItems(),
       store.getFavorites(),
       store.getJob(),
       store.getSettings(),
       store.getMeta(),
       store.getCarts(),
+      store.getPsa(),
     ]);
     const interrupted = await isInterrupted(job);
     // A slower, older refresh must not paint over a newer one.
     if (seq !== refreshSeq) return;
+    ui.setPsa(psa.cards);
     state = { items, favorites, job, settings, meta, carts, interrupted };
     render();
   }

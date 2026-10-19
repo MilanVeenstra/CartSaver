@@ -36,6 +36,7 @@ replacement.
 | **Remembered automatically** | Every article in your cart is saved, cards and sealed products alike (booster boxes, displays…): seller, condition, language, foil, price and quantity, with a picture. You do not have to do anything. |
 | **One click back** | One request per seller, and only what is really missing. So "1 of 2 in your cart" is topped up too. Use the checkboxes to choose what goes back. Changed your mind? *Undo*. |
 | **Know what happened** | For each article you see whether the cart was emptied, whether the seller disappeared or only this article was sold, and whether the price changed. |
+| **Estimated PSA value (Pokémon)** | Optional: which PSA grade the Cardmarket condition probably gets, and what that grade sells for on eBay ("PSA 8 ≈ $45 · 7–10: $30–$205"), next to every Pokémon card. Uses your own free [PokemonPriceTracker](https://www.pokemonpricetracker.com/free-pokemon-card-price-api) key. |
 | **Ignore what is gone** | Offer gone, or you do not want it back? *Ignore* it: no more reminder or badge for it. It waits under *Ignored* (with *Undo*) and counts again as soon as it is back in your cart. |
 | **Replacements for sold cards** | The same card from the same seller, from a seller already in your cart (no extra shipping), or the cheapest similar offer. |
 | **All games in one cart** | Magic, Pokémon, Yu-Gi-Oh!, One Piece, Lorcana… You choose which games go back. |
@@ -123,6 +124,9 @@ changes, commits or a different branch.
   the popup). No passwords are stored.
 - Optional (off by default): download Cardmarket's public price guide once a
   day to compare prices with the trend.
+- Optional (off by default): the estimated PSA value sends the name and number
+  of your Pokémon cards, with your own API key, to PokemonPriceTracker. The key
+  stays in your browser and is not in the export.
 
 ## Good to know
 

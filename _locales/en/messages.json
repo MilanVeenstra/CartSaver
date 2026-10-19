@@ -423,7 +423,7 @@
     "message": "Price $1 higher (was $2)"
   },
   "privacyNote": {
-    "message": "Everything is stored locally in your browser. Cart Saver only talks to Cardmarket (the site and its pictures), through your own session."
+    "message": "Everything is stored locally in your browser. Cart Saver only talks to Cardmarket (the site and its pictures), through your own session, and only if you switch on the PSA estimate also to PokemonPriceTracker."
   },
   "progressCount": {
     "message": "$1 of $2"
@@ -433,6 +433,48 @@
   },
   "prunedNoteOne": {
     "message": "1 article left the list: sold or ignored, and not looked at for a month."
+  },
+  "psaErrorKey": {
+    "message": "PokemonPriceTracker refused the key ($1). Please check it."
+  },
+  "psaErrorLimit": {
+    "message": "Your PokemonPriceTracker credits for today are used up ($1). It continues tomorrow."
+  },
+  "psaErrorOther": {
+    "message": "Could not fetch PSA prices: $1"
+  },
+  "psaLine": {
+    "message": "PSA $1 ≈ $2 · $3: $4"
+  },
+  "psaLineBand": {
+    "message": "PSA $1: $2"
+  },
+  "psaLineOne": {
+    "message": "PSA $1 ≈ $2"
+  },
+  "psaStatus": {
+    "message": "Last updated: $1 · $2 cards with PSA prices."
+  },
+  "psaStatusBusy": {
+    "message": "Fetching…"
+  },
+  "psaStatusNoKey": {
+    "message": "Enter your API key to fetch prices."
+  },
+  "psaStatusOff": {
+    "message": "Switch it on and enter a key first."
+  },
+  "psaStatusWaiting": {
+    "message": "$1 waiting for the next round (daily limit)."
+  },
+  "psaTitle": {
+    "message": "Estimated from the condition $1: probably PSA $2 (PSA $3)."
+  },
+  "psaTitleMatch": {
+    "message": "Matched as: $1"
+  },
+  "psaTitleSales": {
+    "message": "eBay sales via PokemonPriceTracker: $1"
   },
   "reasonEmptied": {
     "message": "Your whole cart was emptied"
@@ -595,6 +637,24 @@
   },
   "settingNotifyHelp": {
     "message": "A notification when saved articles leave your cart while you are elsewhere, and 5 minutes before Cardmarket empties your cart (when the cart page shows that time)."
+  },
+  "settingPsa": {
+    "message": "Estimated PSA value (Pokémon)"
+  },
+  "settingPsaGetKey": {
+    "message": "Get a key"
+  },
+  "settingPsaHelp": {
+    "message": "For Pokémon cards: which PSA grade the Cardmarket condition probably gets (Mint → PSA 9, Near Mint → PSA 7–10, Excellent → PSA 6, Good → 4, Light Played → 3, Played → 2, Poor → 1) and what that grade sells for on eBay, via PokemonPriceTracker. For this the card's name and number are sent, with your key, to PokemonPriceTracker."
+  },
+  "settingPsaKeyHelp": {
+    "message": "Free key: about 100 credits a day; a card costs 2. Prices are kept for a week."
+  },
+  "settingPsaKeyPlaceholder": {
+    "message": "PokemonPriceTracker API key"
+  },
+  "settingPsaRefresh": {
+    "message": "Fetch now"
   },
   "settingReminder": {
     "message": "Show a reminder on Cardmarket"

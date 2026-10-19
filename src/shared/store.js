@@ -26,6 +26,8 @@
     carts: 'cmcs.carts',
     /** Small copies of product pictures, by picture URL (made by the background). */
     thumbs: 'cmcs.thumbs',
+    /** Graded (PSA) prices of Pokémon cards, by product (fetched by the background). */
+    psa: 'cmcs.psa',
   };
 
   /** Saved lists; at this many, saving another is refused (never an old one dropped silently). */
@@ -64,7 +66,29 @@
     awayChecks: false,
     /** Compare prices with Cardmarket's public price guide (downloaded once a day). */
     priceTrend: false,
+    /** Show an estimated PSA value for Pokémon cards (needs a PokemonPriceTracker API key). */
+    psaEstimate: false,
+    /** Your own PokemonPriceTracker API key; it never leaves this browser except to that API. */
+    pptApiKey: '',
   };
+
+  /**
+   * What a Cardmarket condition is likely to get at PSA: the expected grade and
+   * the band around it. Cardmarket's grading is the seller's own, and centring
+   * or print lines are not part of it, so it stays an estimate. Near Mint
+   * spans PSA 7 to 10.
+   */
+  const PSA_BY_CONDITION = {
+    MT: { grade: 9, low: 8, high: 10 },
+    NM: { grade: 8, low: 7, high: 10 },
+    EX: { grade: 6, low: 5, high: 7 },
+    GD: { grade: 4, low: 3, high: 5 },
+    LP: { grade: 3, low: 2, high: 4 },
+    PL: { grade: 2, low: 1, high: 3 },
+    PO: { grade: 1, low: 1, high: 2 },
+  };
+  /** Cardmarket's condition ids (1 = Mint … 7 = Poor). */
+  const CONDITION_CODES = [null, 'MT', 'NM', 'EX', 'GD', 'LP', 'PL', 'PO'];
 
   /** Unavailable and ignored articles leave the list on their own after this long. */
   const UNAVAILABLE_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
@@ -242,6 +266,53 @@
     const fav = {};
     for (const field of FAVORITE_FIELDS) if (article[field] !== undefined) fav[field] = article[field];
     return { ...fav, favoritedAt: now, lastSeenAt: now, unavailable: false, unavailableMessage: null };
+  }
+
+  /** The PSA band for an article's condition, or null (sealed products, unknown condition). */
+  function psaBand(item) {
+    if (!item) return null;
+    // The badge ("NM") first; the condition id when the badge says something else.
+    const codes = [String(item.conditionLabel || '').toUpperCase(), CONDITION_CODES[item.condition]];
+    const code = codes.find((c) => c && PSA_BY_CONDITION[c]);
+    return code ? { ...PSA_BY_CONDITION[code], condition: code } : null;
+  }
+
+  /** The key graded prices are kept under: one per product (every offer of it shares them). */
+  function psaKey(item) {
+    if (!item) return null;
+    if (item.productId) return `p${item.productId}`;
+    if (!item.productUrl) return null;
+    try {
+      // Without the site language: /en/ and /de/ are the same product.
+      return new URL(item.productUrl).pathname.replace(/^\/[a-z]{2}\//, '/').toLowerCase();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The estimate for one article from its product's graded prices: the expected
+   * grade with its price (when sold at that grade), and every known price in the
+   * band. Null when nothing in the band ever sold.
+   */
+  function psaEstimate(item, entry) {
+    const band = psaBand(item);
+    if (!band || !entry || !entry.grades) return null;
+    const prices = Object.entries(entry.grades)
+      .map(([grade, sold]) => ({ grade: Number(grade), price: sold && sold.price, count: (sold && sold.count) || null }))
+      .filter((sold) => sold.price > 0 && sold.grade >= band.low && sold.grade <= band.high)
+      .sort((a, b) => a.grade - b.grade);
+    if (!prices.length) return null;
+    const atGrade = prices.find((sold) => sold.grade === band.grade);
+    return {
+      ...band,
+      price: atGrade ? atGrade.price : null,
+      prices,
+      min: Math.min(...prices.map((sold) => sold.price)),
+      max: Math.max(...prices.map((sold) => sold.price)),
+      currency: entry.currency || 'USD',
+      match: entry.match || null,
+    };
   }
 
   /** Does a favourite match a free-text search (name, expansion, seller…)? */
@@ -426,6 +497,10 @@
     exportText,
     exportCsv,
     formatPrice,
+    PSA_BY_CONDITION,
+    psaBand,
+    psaKey,
+    psaEstimate,
 
     getItems: () => get(KEYS.items, {}),
     setItems: (items) => set(KEYS.items, items),
@@ -682,6 +757,8 @@
     },
 
     getThumbs: () => get(KEYS.thumbs, {}),
+    /** { cards: { [psaKey]: entry }, status } — see src/background/psa.js. */
+    getPsa: () => get(KEYS.psa, {}),
     updateThumbs: (fn) => update(KEYS.thumbs, {}, fn),
 
     getFavorites: () => get(KEYS.favorites, {}),

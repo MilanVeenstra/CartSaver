@@ -1054,15 +1054,18 @@
 
   async function load() {
     let thumbs;
-    [items, favorites, job, carts, thumbs, meta] = await Promise.all([
+    let psa;
+    [items, favorites, job, carts, thumbs, meta, psa] = await Promise.all([
       store.getItems(),
       store.getFavorites(),
       store.getJob(),
       store.getCarts(),
       store.getThumbs(),
       store.getMeta(),
+      store.getPsa(),
     ]);
     ui.setThumbs(thumbs);
+    ui.setPsa(psa.cards);
     // "Opening Cardmarket…" only while that job waits to be picked up.
     if (notice && !store.isJobActive(job)) notice = null;
     render();

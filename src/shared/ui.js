@@ -164,6 +164,45 @@
   const shortMeta = (item) =>
     [item.expansion, item.conditionLabel, languageName(item.languageLabel, item.language), ...(item.extras || [])].filter(Boolean).join(' · ');
 
+  /** Graded prices of Pokémon cards (made by the background, see src/background/psa.js): psaKey → entry. */
+  let psaCards = {};
+  function setPsa(cards) {
+    psaCards = cards || {};
+  }
+
+  /** "$45", "$3,50", "$1.234": graded prices are eBay sales in dollars, shown as such. */
+  function dollars(value) {
+    const lang = root.chrome && chrome.i18n ? chrome.i18n.getUILanguage() : 'en';
+    const digits = value < 10 ? 2 : 0;
+    return `$${value.toLocaleString(lang, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  }
+
+  /**
+   * The estimated PSA value of a card, in a few words ("PSA 8 ≈ $45 · 7–10:
+   * $30–$210"), with the whole story in the tooltip. Null when there is none.
+   */
+  function psaInfo(item) {
+    const store = CMCS.store;
+    const t = CMCS.t;
+    const estimate = store.psaEstimate(item, psaCards[store.psaKey(item)]);
+    if (!estimate) return null;
+    const span = (low, high) => (low === high ? String(low) : `${low}–${high}`);
+    const band = span(estimate.low, estimate.high);
+    const range = estimate.min === estimate.max ? dollars(estimate.min) : `${dollars(estimate.min)}–${dollars(estimate.max)}`;
+    let text;
+    if (estimate.price != null && estimate.prices.length > 1) text = t('psaLine', String(estimate.grade), dollars(estimate.price), band, range);
+    else if (estimate.price != null) text = t('psaLineOne', String(estimate.grade), dollars(estimate.price));
+    else text = t('psaLineBand', band, range);
+    const sales = estimate.prices
+      .map((sold) => `PSA ${sold.grade} ${dollars(sold.price)}${sold.count ? ` (${sold.count}×)` : ''}`)
+      .join(' · ');
+    const match = estimate.match ? [estimate.match.name, estimate.match.set, estimate.match.number].filter(Boolean).join(' · ') : '';
+    const title = [t('psaTitle', estimate.condition, String(estimate.grade), band), t('psaTitleSales', sales), match ? t('psaTitleMatch', match) : null]
+      .filter(Boolean)
+      .join('\n');
+    return { text, title, estimate };
+  }
+
   /** How many copies the row is about: what is in your cart, or what would go back. */
   const copiesOf = (item) => (item.status === 'in_cart' ? item.amount || 1 : CMCS.store.refillAmount(item));
 
@@ -191,6 +230,7 @@
    * @param {Node}     [opts.below]     something under the name (e.g. a link)
    * @param {boolean}  [opts.hideMeta]  leave out the meta line
    * @param {boolean}  [opts.withGame]  add the game to the meta line (several games in view)
+   * @param {boolean}  [opts.psa]       false: leave out the estimated PSA value (Pokémon cards)
    */
   function itemRow(item, opts = {}) {
     const t = CMCS.t;
@@ -216,6 +256,10 @@
         ? null
         : h('div', { class: 'cmcs-item-meta' }, [shortMeta(item), opts.withGame && CMCS.store.gameName ? CMCS.store.gameName(item.game) : null].filter(Boolean).join(' · ')),
       opts.extraMeta ? h('div', { class: 'cmcs-item-meta' }, opts.extraMeta) : null,
+      (() => {
+        const psa = !opts.sold && opts.psa !== false ? psaInfo(item) : null;
+        return psa ? h('div', { class: 'cmcs-item-meta cmcs-psa', title: psa.title }, psa.text) : null;
+      })(),
       noteText && !opts.open
         ? h(
             'div',
@@ -497,6 +541,7 @@
     .cmcs-item-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cmcs-text); text-decoration: none; }
     a.cmcs-item-name:hover { text-decoration: underline; }
     .cmcs-item--sold .cmcs-item-name { color: var(--cmcs-disabled); }
+    .cmcs-psa { color: var(--cmcs-text); font-variant-numeric: tabular-nums; }
     .cmcs-item--ignored .cmcs-item-name, .cmcs-item--ignored .cmcs-price { color: var(--cmcs-muted); }
     .cmcs-item--ignored .cmcs-thumb { opacity: 0.55; }
     .cmcs-item-meta { font-size: 12px; color: var(--cmcs-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -583,6 +628,9 @@
     jobError,
     thumbnail,
     setThumbs,
+    setPsa,
+    psaInfo,
+    dollars,
     STYLES,
   };
 })(globalThis);

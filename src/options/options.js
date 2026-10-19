@@ -19,6 +19,8 @@
   $('notify').checked = settings.notify;
   $('awayChecks').checked = settings.awayChecks;
   $('priceTrend').checked = settings.priceTrend;
+  $('psaEstimate').checked = settings.psaEstimate;
+  $('pptApiKey').value = settings.pptApiKey || '';
   $('delay').value = (settings.delayMs / 1000).toFixed(1);
 
   let savedTimer = null;
@@ -34,6 +36,44 @@
   $('notify').addEventListener('change', (e) => save({ notify: e.target.checked }));
   $('awayChecks').addEventListener('change', (e) => save({ awayChecks: e.target.checked }));
   $('priceTrend').addEventListener('change', (e) => save({ priceTrend: e.target.checked }));
+
+  // PSA values: the key is only kept here and sent to PokemonPriceTracker itself.
+  $('psaEstimate').addEventListener('change', (e) => save({ psaEstimate: e.target.checked }));
+  $('pptApiKey').addEventListener('change', (e) => {
+    e.target.value = e.target.value.trim();
+    save({ pptApiKey: e.target.value });
+  });
+  $('psaRefresh').addEventListener('click', async () => {
+    $('psaStatus').textContent = t('psaStatusBusy');
+    const reply = await chrome.runtime.sendMessage({ type: 'cmcs.psaRefresh' }).catch(() => null);
+    if (!reply || !reply.status) $('psaStatus').textContent = t('psaStatusOff');
+    renderPsaStatus();
+  });
+
+  /** What the last look-up found, or why it stopped. */
+  async function renderPsaStatus() {
+    const current = await store.getSettings();
+    const { status } = await store.getPsa();
+    $('psaKeyBox').hidden = !current.psaEstimate;
+    if (!current.psaEstimate) {
+      $('psaStatus').textContent = '';
+      return;
+    }
+    if (!String(current.pptApiKey || '').trim()) {
+      $('psaStatus').textContent = t('psaStatusNoKey');
+      return;
+    }
+    if (!status || !status.at) return;
+    const when = new Date(status.at).toLocaleString(chrome.i18n.getUILanguage(), { dateStyle: 'short', timeStyle: 'short' });
+    const errors = { key: 'psaErrorKey', limit: 'psaErrorLimit' };
+    $('psaStatus').textContent = status.error
+      ? t(errors[status.error] || 'psaErrorOther', status.errorDetail || status.error)
+      : [t('psaStatus', when, String(status.known || 0)), status.waiting ? t('psaStatusWaiting', String(status.waiting)) : null].filter(Boolean).join(' ');
+  }
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && (changes[store.KEYS.psa] || changes[store.KEYS.settings])) renderPsaStatus();
+  });
+  renderPsaStatus();
 
   /** When the price guide was last read, or why not. */
   async function renderTrendStatus() {

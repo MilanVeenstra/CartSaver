@@ -387,5 +387,6 @@
   }
 
   await safely('favourites', () => CMCS.favorites.init(loc));
+  await safely('PSA values', () => CMCS.psaLabels.init(loc));
   await safely('refill', () => CMCS.refill.resumePending());
 })();

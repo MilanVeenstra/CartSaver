@@ -423,7 +423,7 @@
     "message": "Prijs $1 hoger (was $2)"
   },
   "privacyNote": {
-    "message": "Alles wordt lokaal in je browser bewaard. Cart Saver praat alleen met Cardmarket (de site en de plaatjes), via je eigen sessie."
+    "message": "Alles wordt lokaal in je browser bewaard. Cart Saver praat alleen met Cardmarket (de site en de plaatjes), via je eigen sessie, en alleen als je de PSA-schatting aanzet ook met PokemonPriceTracker."
   },
   "progressCount": {
     "message": "$1 van $2"
@@ -433,6 +433,48 @@
   },
   "prunedNoteOne": {
     "message": "1 artikel uit de lijst gehaald: verkocht of genegeerd, en een maand niet meer bekeken."
+  },
+  "psaErrorKey": {
+    "message": "PokemonPriceTracker weigert de sleutel ($1). Controleer hem."
+  },
+  "psaErrorLimit": {
+    "message": "Je credits bij PokemonPriceTracker zijn voor vandaag op ($1). Morgen gaat het verder."
+  },
+  "psaErrorOther": {
+    "message": "PSA-prijzen ophalen lukte niet: $1"
+  },
+  "psaLine": {
+    "message": "PSA $1 ≈ $2 · $3: $4"
+  },
+  "psaLineBand": {
+    "message": "PSA $1: $2"
+  },
+  "psaLineOne": {
+    "message": "PSA $1 ≈ $2"
+  },
+  "psaStatus": {
+    "message": "Laatst bijgewerkt: $1 · $2 kaarten met PSA-prijzen."
+  },
+  "psaStatusBusy": {
+    "message": "Bezig met ophalen…"
+  },
+  "psaStatusNoKey": {
+    "message": "Vul je API-sleutel in om prijzen op te halen."
+  },
+  "psaStatusOff": {
+    "message": "Zet het eerst aan en vul een sleutel in."
+  },
+  "psaStatusWaiting": {
+    "message": "$1 wachten op de volgende ronde (dagelijkse limiet)."
+  },
+  "psaTitle": {
+    "message": "Geschat op basis van de conditie $1: waarschijnlijk PSA $2 (PSA $3)."
+  },
+  "psaTitleMatch": {
+    "message": "Gevonden als: $1"
+  },
+  "psaTitleSales": {
+    "message": "eBay-verkopen via PokemonPriceTracker: $1"
   },
   "reasonEmptied": {
     "message": "Je hele mandje werd geleegd"
@@ -595,6 +637,24 @@
   },
   "settingNotifyHelp": {
     "message": "Een melding als opgeslagen artikelen uit je mandje verdwijnen terwijl je ergens anders bent, en 5 minuten voordat Cardmarket je mandje leegt (als de mandjepagina die tijd toont)."
+  },
+  "settingPsa": {
+    "message": "Geschatte PSA-waarde (Pokémon)"
+  },
+  "settingPsaGetKey": {
+    "message": "Sleutel aanvragen"
+  },
+  "settingPsaHelp": {
+    "message": "Bij Pokémon-kaarten: welke PSA-grade de Cardmarket-conditie waarschijnlijk haalt (Mint → PSA 9, Near Mint → PSA 7–10, Excellent → PSA 6, Good → 4, Light Played → 3, Played → 2, Poor → 1) en wat die grade op eBay opbrengt, via PokemonPriceTracker. Daarvoor gaan de naam en het nummer van de kaart, met jouw sleutel, naar PokemonPriceTracker."
+  },
+  "settingPsaKeyHelp": {
+    "message": "Gratis sleutel: ongeveer 100 credits per dag, een kaart kost er 2. Prijzen worden een week onthouden."
+  },
+  "settingPsaKeyPlaceholder": {
+    "message": "API-sleutel van PokemonPriceTracker"
+  },
+  "settingPsaRefresh": {
+    "message": "Nu ophalen"
   },
   "settingReminder": {
     "message": "Melding tonen op Cardmarket"

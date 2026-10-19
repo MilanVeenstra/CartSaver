@@ -14,10 +14,11 @@
  * 5. Once a day: forgets unavailable and ignored articles older than a month, and
  *    (optional) reads Cardmarket's public price guide for the saved cards.
  * 6. Product pictures for the popup (see images.js).
+ * 7. Optional: estimated PSA values for Pokémon cards (see psa.js).
  */
-importScripts('../shared/store.js', 'images.js');
+importScripts('../shared/store.js', 'images.js', 'psa.js');
 
-const { store, images } = self.CMCS;
+const { store, images, psa } = self.CMCS;
 
 const UPDATE_ALARM = 'cmcs.selfUpdate';
 const UPDATE_CHECK_MINUTES = 1;
@@ -337,6 +338,7 @@ async function daily() {
   await pruneStale();
   await images.pruneThumbs().catch(() => {});
   await refreshPrices().catch(() => {});
+  await psa.refresh().catch(() => {});
 }
 
 // --- Wiring ---------------------------------------------------------------------------
@@ -364,6 +366,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes[store.KEYS.items]) {
     updateBadge();
     sweepSoon();
+    psa.refreshSoon();
   }
   if (changes[store.KEYS.items] || changes[store.KEYS.favorites] || changes[store.KEYS.carts]) images.captureSoon();
   if (changes[store.KEYS.meta]) {
@@ -378,7 +381,21 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (!was && now) refreshPrices({ force: true }).catch(() => {});
     // Switched off: the notes about the trend go too.
     if (was && !now) clearTrends().catch(() => {});
+    // PSA values: on (or a new key) looks them up now; off (or no key) forgets them.
+    const psaOn = (s) => Boolean(s && s.psaEstimate && String(s.pptApiKey || '').trim());
+    const before = changes[store.KEYS.settings].oldValue;
+    const after = changes[store.KEYS.settings].newValue;
+    if (psaOn(after) && (!psaOn(before) || before.pptApiKey !== after.pptApiKey)) psa.refresh({ force: true }).catch(() => {});
+    if (psaOn(before) && !psaOn(after)) psa.clear().catch(() => {});
   }
+});
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || message.type !== 'cmcs.psaRefresh') return false;
+  psa.refresh({ force: true }).then(
+    (status) => sendResponse({ ok: true, status }),
+    (err) => sendResponse({ ok: false, error: err.message }),
+  );
+  return true;
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== 'cmcs.notify' || message.kind !== 'emptied') return false;
@@ -404,4 +421,4 @@ runningFingerprint().catch(() => {});
 
 // Exposed for the end-to-end test.
 self.cmcsCheckForNewVersion = checkForNewVersion;
-self.cmcs = { warnExpiry, scheduleExpiryAlarm, awayCheck, refreshPrices, pruneStale, notify, images, sweepSoon };
+self.cmcs = { warnExpiry, scheduleExpiryAlarm, awayCheck, refreshPrices, pruneStale, notify, images, sweepSoon, psa };

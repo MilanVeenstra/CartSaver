@@ -54,6 +54,24 @@
             <span class="cmcs-muted" id="trendStatus"></span>
           </span>
         </label>
+        <div class="row row--block">
+          <label class="row-check">
+            <input type="checkbox" id="psaEstimate" />
+            <span>
+              <strong data-i18n="settingPsa"></strong>
+              <span class="cmcs-muted" data-i18n="settingPsaHelp"></span>
+            </span>
+          </label>
+          <div class="psa-key" id="psaKeyBox">
+            <input type="password" id="pptApiKey" autocomplete="off" spellcheck="false" data-i18n-placeholder="settingPsaKeyPlaceholder" data-i18n-label="settingPsaKeyPlaceholder" />
+            <button type="button" class="cmcs-btn cmcs-btn--small cmcs-btn--ghost" id="psaRefresh" data-i18n="settingPsaRefresh"></button>
+          </div>
+          <span class="cmcs-muted psa-note">
+            <span data-i18n="settingPsaKeyHelp"></span>
+            <a href="https://www.pokemonpricetracker.com/free-pokemon-card-price-api" target="_blank" rel="noopener" data-i18n="settingPsaGetKey"></a>
+          </span>
+          <span class="cmcs-muted psa-note" id="psaStatus" aria-live="polite"></span>
+        </div>
         <label class="row row--input">
           <span>
             <strong data-i18n="settingDelay"></strong>

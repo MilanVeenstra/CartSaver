@@ -1845,6 +1845,118 @@ describe('Cardmarket Cart Saver', () => {
     });
   });
 
+  describe('estimated PSA value (Pokémon)', () => {
+    const PIKACHU = '1622220000';
+    const API = 'https://www.pokemonpricetracker.com/**';
+    const requests = [];
+    const card = (number, set, grades) => ({ name: 'Pikachu', cardNumber: number, setName: set, tcgPlayerId: 42, ebay: { salesByGrade: grades } });
+    const answer = {
+      data: [
+        card('60/102', 'Jungle', { psa9: { count: 3, medianPrice: 999 } }), // another Pikachu: never its price
+        card('58/102', 'Base Set', {
+          psa10: { count: 12, medianPrice: 210, smartMarketPrice: { price: 205, confidence: 'high' } },
+          psa9: { count: 30, medianPrice: 80 },
+          psa8: { count: 20, medianPrice: 45.4 },
+          psa7: { count: 5, medianPrice: 30 },
+          psa6: { count: 2, medianPrice: 20 },
+        }),
+      ],
+    };
+    const setSettings = (patch) =>
+      sw.evaluate(async (p) => {
+        const { 'cmcs.settings': settings } = await chrome.storage.local.get('cmcs.settings');
+        await chrome.storage.local.set({ 'cmcs.settings': { ...settings, ...p } });
+      }, patch);
+    const psa = async () => (await storage())['cmcs.psa'];
+
+    before(async () => {
+      await context.route(API, (r) => {
+        const request = r.request();
+        requests.push({ url: request.url(), auth: request.headers().authorization });
+        if (request.headers().authorization !== 'Bearer test-key') {
+          return r.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"Invalid API key"}' });
+        }
+        return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) });
+      });
+      for (const id of [PIKACHU, BOG]) mock.state.available.set(id, mock.article(id));
+      mock.state.cart = new Map([[PIKACHU, 1], [BOG, 1]]);
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.job': null, 'cmcs.meta': {}, 'cmcs.items': {}, 'cmcs.psa': {} }));
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      await waitFor(async () => (await items())[PIKACHU]?.status === 'in_cart', 'the Pikachu saved');
+    });
+    after(async () => {
+      await context.unroute(API);
+      await setSettings({ psaEstimate: false, pptApiKey: '' });
+    });
+
+    it('translates Cardmarket conditions into a PSA grade and band', async () => {
+      const bands = await sw.evaluate(() =>
+        ['MT', 'NM', 'EX', 'GD', 'LP', 'PL', 'PO'].map((code) => {
+          const band = self.CMCS.store.psaBand({ conditionLabel: code });
+          return `${code} ${band.grade} ${band.low}-${band.high}`;
+        }),
+      );
+      assert.deepEqual(bands, ['MT 9 8-10', 'NM 8 7-10', 'EX 6 5-7', 'GD 4 3-5', 'LP 3 2-4', 'PL 2 1-3', 'PO 1 1-2']);
+      assert.equal(await sw.evaluate(() => self.CMCS.store.psaBand({ conditionLabel: null })), null, 'sealed products have no condition');
+      // Only the same card counts: the same number, never just the same name.
+      const picked = await sw.evaluate((cards) => {
+        const { pickMatch } = self.cmcs.psa;
+        const pikachu = { name: 'Pikachu', number: '58', expansion: 'Base Set' };
+        return [pickMatch(pikachu, cards)?.cardNumber ?? null, pickMatch({ ...pikachu, number: '25' }, cards)?.cardNumber ?? null];
+      }, answer.data);
+      assert.deepEqual(picked, ['58/102', null]);
+    });
+
+    it('shows the estimated PSA value in the popup and in the cart, from one look-up', async () => {
+      await setSettings({ psaEstimate: true, pptApiKey: 'test-key' });
+      const saved = await waitFor(async () => (await psa())?.status?.known === 1 && (await psa()), 'PSA prices fetched');
+      assert.equal(requests.length, 1, 'one search for the one Pokémon card; the Magic card is not looked up');
+      const url = new URL(requests[0].url);
+      assert.equal(requests[0].auth, 'Bearer test-key');
+      assert.equal(url.searchParams.get('search'), 'Pikachu 58');
+      assert.equal(url.searchParams.get('includeEbay'), 'true');
+      assert.deepEqual(Object.values(saved.cards)[0].grades['10'], { price: 205, count: 12 });
+
+      const popup = await context.newPage();
+      await popup.setViewportSize({ width: 400, height: 600 });
+      await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+      await popup.locator('#tab-cart').click();
+      const line = popup.locator(`#list .cmcs-item[data-article-id="${PIKACHU}"] .cmcs-psa`);
+      await waitFor(() => line.isVisible(), 'PSA line in the popup');
+      assert.equal(await line.innerText(), 'PSA 8 ≈ $45 · 7–10: $30–$205');
+      assert.match(await line.getAttribute('title'), /conditie NM: waarschijnlijk PSA 8 \(PSA 7–10\)[\s\S]*PSA 10 \$205 \(12×\)[\s\S]*Gevonden als: Pikachu · Base Set · 58\/102/);
+      assert.equal(await popup.locator(`#list .cmcs-item[data-article-id="${BOG}"] .cmcs-psa`).count(), 0, 'not for Magic cards');
+      await shot(popup, '26-popup-psa');
+      await popup.close();
+
+      await page.reload();
+      const label = page.locator(`tr[data-article-id="${PIKACHU}"] cmcs-psa span`).first();
+      await waitFor(() => label.isVisible(), 'PSA label in the cart');
+      assert.equal(await label.innerText(), 'PSA 8 ≈ $45 · 7–10: $30–$205');
+      assert.equal(await page.locator(`tr[data-article-id="${BOG}"] cmcs-psa`).count(), 0);
+
+      // Kept for a week: looking again costs no credits.
+      await sw.evaluate(() => self.cmcs.psa.refresh({ force: true }));
+      assert.equal(requests.length, 1);
+    });
+
+    it('says when the key is refused, and forgets the prices when switched off', async () => {
+      await sw.evaluate(() => chrome.storage.local.remove('cmcs.psa'));
+      await setSettings({ pptApiKey: 'wrong-key' });
+      await waitFor(async () => (await psa())?.status?.error === 'key', 'refused');
+      const options = await context.newPage();
+      await options.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+      await waitFor(async () => /weigert de sleutel/.test(await options.locator('#psaStatus').innerText()), 'said in the settings');
+      await shot(options, '27-options-psa');
+
+      await setSettings({ pptApiKey: 'test-key' });
+      await waitFor(async () => (await psa())?.status?.known === 1, 'fetched with the right key');
+      await options.locator('#psaEstimate').uncheck();
+      await waitFor(async () => !(await psa()), 'forgotten');
+      await options.close();
+    });
+  });
+
   describe('a calm panel', () => {
     const FAKE = Array.from({ length: 14 }, (_, i) => String(9000000001 + i));
     const fake = (id, i) => ({
