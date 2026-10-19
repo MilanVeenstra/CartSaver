@@ -79,6 +79,11 @@
   });
   for (const [id, name] of [['tab-cart', 'cart'], ['tab-fav', 'fav'], ['tab-carts', 'carts']]) {
     $(id).addEventListener('click', () => {
+      // Another tab is a fresh look: nothing stays unfolded from before.
+      if (tab !== name) {
+        openId = null;
+        favOpenId = null;
+      }
       tab = name;
       try {
         localStorage.setItem(TAB_KEY, name);
@@ -337,10 +342,35 @@
   // The refill in progress (or just finished)
   // ---------------------------------------------------------------------------
 
+  /**
+   * A result that went fully right is shown once by the popup: it stays while
+   * this popup is open, and the next time it is not there any more. Only the
+   * popup remembers that, so the panel on Cardmarket still says it too.
+   */
+  const SEEN_KEY = 'cmcs.popupSeenJob';
+  let shownJobId = null;
+  const seenBefore = (id) => {
+    try {
+      return localStorage.getItem(SEEN_KEY) === id;
+    } catch {
+      return false;
+    }
+  };
+
   function renderJob() {
     const box = $('job');
     const active = store.isJobActive(job);
-    const recent = job && job.finishedAt && !job.acknowledged && Date.now() - job.finishedAt < 10 * 60 * 1000;
+    const fresh = Boolean(job && job.finishedAt && !job.acknowledged && Date.now() - job.finishedAt < 10 * 60 * 1000);
+    const needsYou = job && ((job.failed || 0) > 0 || (job.error && job.error !== 'cancelled'));
+    if (fresh && !needsYou && shownJobId !== job.id && !seenBefore(job.id)) {
+      shownJobId = job.id;
+      try {
+        localStorage.setItem(SEEN_KEY, job.id);
+      } catch {
+        // Then it may show once more; no harm.
+      }
+    }
+    const recent = (fresh && (needsYou || shownJobId === job.id)) || Boolean(job && job.finishedAt && job.id === shownJobId);
     const interrupted = store.isJobInterrupted(job) && !job.acknowledged;
     if (!active && !recent && !interrupted) {
       box.hidden = true;
@@ -385,7 +415,7 @@
         null,
         h('strong', null, stopped ? t('refillStoppedTitle') : t('refillDoneTitle')),
         ' — ',
-        t('refillSummary', job.added || 0, job.failed || 0),
+        ui.resultText(job),
       ),
       ...ui.jobError(job),
       job.undoResult && !job.undoResult.ok
@@ -397,7 +427,7 @@
         job.added > 0 && !job.undone
           ? h('button', { type: 'button', class: 'cmcs-btn cmcs-btn--ghost cmcs-btn--small', disabled: Boolean(job.undoRequested), onclick: undoFromPopup }, t('undo'))
           : h('span'),
-        h('button', { type: 'button', class: 'cmcs-btn cmcs-btn--ghost cmcs-btn--small', onclick: acknowledgeJob }, t('close')),
+        h('button', { type: 'button', class: 'cmcs-btn cmcs-btn--ghost cmcs-btn--small', onclick: () => { shownJobId = null; acknowledgeJob(); render(); } }, t('close')),
       ),
     ];
     box.replaceChildren(...parts.filter(Boolean));
@@ -585,7 +615,7 @@
     $('empty').hidden = all.length > 0;
     for (const id of ['summary', 'list', 'export']) $(id).hidden = all.length === 0;
     const foot = $('foot');
-    foot.hidden = tab !== 'cart' || all.length === 0;
+    if (tab === 'cart') foot.hidden = all.length === 0;
     if (!all.length) {
       $('refill-games').hidden = true;
       $('game').hidden = true;
@@ -696,7 +726,7 @@
           },
         }),
         details: [
-          ui.detailButton(t('detailRefillOne'), () => refill([item]), { strong: true }),
+          ui.detailButton(t('detailRefillOne'), () => { openId = null; refill([item]); }, { strong: true }),
           ui.detailButton(t('detailOpen'), null, { href: cm.offerUrl(item) || item.productUrl }),
           ui.detailButton(t('detailIgnore'), () => ignoreItems([item]), { title: t('ignoreHint') }),
           cm.alternativesUrl(item) ? h('a', { class: 'cmcs-detail-btn', href: cm.alternativesUrl(item), target: '_blank', rel: 'noopener', title: t('findAlternative'), 'aria-label': t('findAlternative') }, ui.icon('search')) : null,
@@ -737,6 +767,8 @@
         note: why ? why.text : null,
         noteTitle: why ? why.raw : null,
         withGame: multiGame,
+        open: openId === item.articleId,
+        onToggle: toggleRow(item.articleId),
         // The suggestions themselves need the cart page (Cardmarket's pages are read there).
         below: alt
           ? h(
@@ -745,95 +777,67 @@
               t('replaceFind'),
             )
           : null,
-        actions: [
-          ui.iconButton(t('refillOne'), 'refresh', () => refill([item])),
-          alt ? ui.iconLink(t('findAlternative'), 'search', alt) : null,
-          ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item])),
-        ].filter(Boolean),
+        // Room for the name: the rarer actions wait in the opened row.
+        details: [ui.detailButton(t('retryOne'), () => refill([item])), alt ? ui.detailButton(t('findAlternative'), null, { href: alt }) : null].filter(Boolean),
+        actions: [ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item]))],
       });
     };
 
     const list = [];
+    // Every section the same: "Title (count)" with its own actions on the right.
     if (candidates.length) {
       const allTicked = toRefill.length === candidates.length;
       list.push(
-        h(
-          'div',
-          { class: 'select-line' },
-          h('span', null, t('groupMissing', store.copiesToReturn(candidates))),
-          h(
-            'button',
-            {
-              type: 'button',
-              class: 'cmcs-link',
-              onclick: () => {
-                candidates.forEach((item) => (allTicked ? deselected.add(item.articleId) : deselected.delete(item.articleId)));
-                render();
-              },
-            },
-            allTicked ? t('selectNone') : t('selectAll'),
-          ),
-        ),
-      );
-    }
-    list.push(groupBySeller(candidates, missingRow));
-    if (toRefill.length) {
-      list.push(
-        h(
-          'div',
-          { class: 'section-actions' },
-          h('button', { type: 'button', class: 'cmcs-link', title: t('ignoreHint'), onclick: () => ignoreItems(toRefill) }, t('ignoreSelected', String(store.copiesToReturn(toRefill)))),
-        ),
+        ui.sectionHead(t('groupMissing', store.copiesToReturn(candidates)), [
+          ui.sectionLink(allTicked ? t('selectNone') : t('selectAll'), () => {
+            candidates.forEach((item) => (allTicked ? deselected.add(item.articleId) : deselected.delete(item.articleId)));
+            render();
+          }),
+        ]),
+        groupBySeller(candidates, missingRow),
       );
     }
     if (unavailable.length) {
       list.push(
-        h('div', { class: 'cmcs-section-title' }, t('sectionUnavailable')),
+        ui.sectionHead(t('groupUnavailable', unavailable.length), [
+          ui.sectionLink(t('retryUnavailable'), () => refill(unavailable)),
+          ui.sectionLink(t('clearUnavailable'), () => removeItems(unavailable)),
+        ]),
         [...unavailable].sort(bySellerName).map(soldRow),
-        h(
-          'div',
-          { class: 'section-actions' },
-          h('button', { type: 'button', class: 'cmcs-link', onclick: () => refill(unavailable) }, t('retryUnavailable')),
-          h('button', { type: 'button', class: 'cmcs-link', onclick: () => removeItems(unavailable) }, t('clearUnavailable')),
-        ),
       );
     }
     if (inCart.length) {
       list.push(
-        h('div', { class: 'cmcs-section-title' }, t('sectionInCart', store.copiesInCart(inCart))),
+        ui.sectionHead(t('sectionInCart', store.copiesInCart(inCart))),
         groupBySeller(inCart.map((item) => ({ ...item, status: STATUS.IN_CART })), inCartRow),
       );
     }
     if (ignored.length) {
       list.push(
-        h(
-          'div',
-          { class: 'cmcs-fold-line' },
-          h('span', null, t('sectionIgnored', String(ignored.length))),
-          h(
-            'button',
-            { type: 'button', class: 'cmcs-link', 'aria-expanded': String(showIgnored), onclick: () => { showIgnored = !showIgnored; render(); } },
-            showIgnored ? t('hide') : t('show'),
-          ),
-        ),
-        showIgnored
-          ? [
-              [...ignored].sort(bySellerName).map(ignoredRow),
-              h(
-                'div',
-                { class: 'section-actions' },
-                h('button', { type: 'button', class: 'cmcs-link', onclick: () => removeItems(ignored) }, t('clearUnavailable')),
-              ),
-            ]
-          : null,
+        ui.sectionHead(t('sectionIgnored', String(ignored.length)), [
+          showIgnored ? ui.sectionLink(t('clearUnavailable'), () => removeItems(ignored)) : null,
+          ui.sectionLink(showIgnored ? t('hide') : t('show'), () => {
+            showIgnored = !showIgnored;
+            render();
+          }, { 'aria-expanded': String(showIgnored) }),
+        ]),
+        showIgnored ? [...ignored].sort(bySellerName).map(ignoredRow) : null,
       );
     }
     $('list').replaceChildren(...list.flat(Infinity).filter(Boolean));
 
-    // The one big button.
+    // The one big button; ignoring the same selection next to it.
+    if (tab !== 'cart') return;
     foot.replaceChildren(
       toRefill.length
-        ? ui.primaryButton(t('refillButton', store.copiesToReturn(toRefill)), store.formatPrice(refillValue(toRefill)), () => refill(toRefill), { disabled: busy })
+        ? ui.footBar(
+            ui.primaryButton(t('refillButton', store.copiesToReturn(toRefill)), store.formatPrice(refillValue(toRefill)), () => refill(toRefill), { disabled: busy }),
+            h(
+              'button',
+              { type: 'button', class: 'cmcs-btn cmcs-btn--ghost', title: t('ignoreHint'), onclick: () => ignoreItems(toRefill) },
+              t('ignoreCount', String(store.copiesToReturn(toRefill))),
+            ),
+          )
         : ui.primaryButton(t('nothingToRefill'), '', null, { disabled: true }),
     );
   }
@@ -848,52 +852,53 @@
     const inCartFav = (fav) => inCartStatus(items[fav.articleId]);
     const soldFav = (fav) => fav.unavailable && !inCartFav(fav);
 
-    // Ticked favourites: into the cart together (one job), or kept as a list.
+    // Ticked favourites: into the cart together (one job, the big button), or kept as a list.
     const ticked = all.filter((fav) => favSelected.has(fav.articleId));
-    const bar = $('fav-bar');
-    bar.hidden = !ticked.length;
+    const openListForm = () => {
+      $('fav-list-form-meta').textContent = CMCS.tn('countFavorites', ticked.length, ticked.length);
+      $('fav-list-form').hidden = false;
+      $('fav-list-name').focus();
+    };
+    // What is in the cart already (or sold) is skipped, and said so.
     const toCart = ticked.filter((fav) => !inCartFav(fav) && !soldFav(fav));
-    bar.replaceChildren(
-      ...(ticked.length
-        ? [
-            h('span', null, t('favSelected', String(ticked.length))),
-            toCart.length
-              ? h(
-                  'button',
-                  {
-                    type: 'button',
-                    class: 'cmcs-btn cmcs-btn--small',
-                    disabled: store.isJobActive(job),
-                    onclick: async () => {
-                      favSelected.clear();
-                      await addFavoritesToCart(toCart);
-                    },
-                  },
-                  t('favAddSelected', String(toCart.length)),
-                )
-              : null,
-            h(
-              'button',
-              {
-                type: 'button',
-                class: 'cmcs-link',
-                onclick: () => {
-                  $('fav-list-form-meta').textContent = CMCS.tn('countFavorites', ticked.length, ticked.length);
-                  $('fav-list-form').hidden = false;
-                  $('fav-list-name').focus();
-                },
-              },
-              t('listsSaveOpen'),
-            ),
-            h('button', { type: 'button', class: 'cmcs-link', onclick: () => { favSelected.clear(); render(); } }, t('clearSelection')),
-          ].filter(Boolean)
-        : []),
-    );
+    const alreadyIn = ticked.filter(inCartFav).length;
 
+    if (tab === 'fav') {
+      const foot = $('foot');
+      foot.hidden = !ticked.length;
+      const value = toCart.reduce((sum, fav) => sum + (fav.price || 0), 0);
+      foot.replaceChildren(
+        toCart.length
+          ? ui.primaryButton(t('favToCart', String(toCart.length)), store.formatPrice(value), async () => {
+              favSelected.clear();
+              await addFavoritesToCart(toCart);
+            }, { disabled: store.isJobActive(job) })
+          : ui.primaryButton(t('favAllInCart'), '', null, { disabled: true }),
+      );
+    }
+
+    // One head, like the cart tab: how many, what is ticked, and what to do with it.
+    const allTicked = visible.length > 0 && visible.every((fav) => favSelected.has(fav.articleId));
+    const headText = [
+      CMCS.tn('countFavorites', visible.length, visible.length),
+      ticked.length ? t('favSelected', String(ticked.length)) : null,
+      alreadyIn ? t('favInCartCount', String(alreadyIn)) : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const head = visible.length
+      ? ui.sectionHead(headText, [
+          ticked.length ? ui.sectionLink(t('listsSaveOpen'), openListForm) : null,
+          ui.sectionLink(allTicked ? t('selectNone') : t('selectAll'), () => {
+            visible.forEach((fav) => (allTicked ? favSelected.delete(fav.articleId) : favSelected.add(fav.articleId)));
+            render();
+          }),
+        ])
+      : null;
     $('fav-list').replaceChildren(
       ...(all.length && !visible.length
         ? [h('p', { class: 'cmcs-muted' }, t('favNoMatches'))]
-        : visible.map((fav) => {
+        : [head, ...visible.map((fav) => {
             const inCart = inCartFav(fav);
             const sold = soldFav(fav);
             const offer = cm.offerUrl(fav);
@@ -936,7 +941,7 @@
                 ui.iconButton(t('favRemove'), 'starFilled', () => unstar(fav), 'cmcs-icon-btn--star'),
               ].filter(Boolean),
             });
-          })),
+          })].filter(Boolean)),
     );
   }
 
@@ -1050,6 +1055,7 @@
     renderFavorites();
     renderCart();
     renderCarts();
+    if (tab === 'carts') $('foot').hidden = true;
   }
 
   async function load() {

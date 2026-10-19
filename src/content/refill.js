@@ -589,5 +589,5 @@
     return outcome;
   }
 
-  CMCS.refill = { start, resumePending, cancel, undo, lockHeld, remainingIds, isRunning: () => running };
+  CMCS.refill = { start, resumePending, cancel, undo, lockHeld, remainingIds, isRunning: () => running, ranHere: (job) => Boolean(job && job.runner === RUNNER_ID) };
 })(globalThis);

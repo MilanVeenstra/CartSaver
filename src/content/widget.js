@@ -16,6 +16,10 @@
   const { h } = ui;
 
   const SUMMARY_TTL_MS = 10 * 60 * 1000;
+  /** A result on the cart page counts as seen after this long (the page reloads sooner after a refill). */
+  const RESULT_SEEN_MS = 5000;
+  /** Other tabs leave a fresh result this long to the tab that ran it (and its reloaded cart page). */
+  const RESULT_OWNER_MS = 12000;
 
   let loc;
   let host;
@@ -78,10 +82,15 @@
     .cmcs-shipping-list { margin-top: 4px; }
     .cmcs-shipping-row { padding: 6px 0; border-top: 1px solid var(--cmcs-line); }
     .cmcs-shipping-row .cmcs-item-meta { white-space: normal; }
-    .cmcs-replace { margin: 0 0 8px 40px; padding: 6px 10px; background: var(--cmcs-surface); }
+    .cmcs-replace { margin: -2px 0 8px 40px; padding: 6px 10px; background: var(--cmcs-surface); }
     .cmcs-replace .cmcs-item:first-of-type { border-top: 0; }
     .cmcs-replace .cmcs-item-meta:last-child { white-space: normal; }
-    .cmcs-replace-title { font-size: 12px; color: var(--cmcs-muted); margin: 2px 0; }
+    .cmcs-replace-title { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--cmcs-muted); margin: 0 -4px 2px 0; }
+    .cmcs-result { display: flex; align-items: flex-start; gap: 10px; padding: 10px 6px 10px 12px; margin: 6px 0 4px; background: var(--cmcs-surface); border-left: 3px solid var(--cmcs-text); }
+    .cmcs-result--warn { border-left-color: var(--cmcs-red); }
+    .cmcs-result-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .cmcs-result .cmcs-link { margin-top: 2px; white-space: nowrap; }
+    .cmcs-result .cmcs-icon-btn { margin-top: -4px; }
     .cmcs-list-form { display: flex; gap: 8px; align-items: center; margin: 8px 0 0; }
     .cmcs-input {
       flex: 1; min-width: 0; font: inherit; color: var(--cmcs-text); background: transparent; border: 0; border-radius: 0;
@@ -364,6 +373,88 @@
 
   const acknowledgeJob = () => store.updateJob((job) => (job ? { ...job, acknowledged: true } : undefined));
 
+  /** A refill result that needs you: something did not go back, or it stopped with an error. */
+  const resultNeedsYou = (job) => (job.failed || 0) > 0 || Boolean(job.error && job.error !== 'cancelled');
+  /** The last refill's result, while it is worth showing: not closed yet, and recent. */
+  const freshResult = (job) => Boolean(job && job.finishedAt && !job.acknowledged && Date.now() - job.finishedAt < SUMMARY_TTL_MS);
+  const resultText = (job) => ui.resultText(job);
+  /** What did not make it: saved articles, and favourites (which are not on the list). */
+  const failedOf = (job) =>
+    Object.entries(job.results || {})
+      .filter(([, result]) => !result.ok)
+      .map(([id, result]) => ({ item: state.items[id] || state.favorites[id], result, favorite: !state.items[id] }))
+      .filter(({ item }) => item);
+
+  /** A result that went fully right, already said on this page (and closed everywhere else). */
+  let saidResult = null;
+  let resultClosed = false;
+  const saidJobs = new Set();
+  let waitingToBeSeen = false;
+  let ownerTimer = null;
+  /**
+   * Say a result that went fully right once, as soon as you can see it: in the
+   * cart view on the cart page, in a strip elsewhere. Then it is closed, so it
+   * does not follow you around the site for ten minutes.
+   */
+  function sayResultOnce(job) {
+    if (saidJobs.has(job.id)) return;
+    // The tab that ran it says it (or its cart page, after the reload); another tab only when nobody did.
+    const age = Date.now() - (job.finishedAt || 0);
+    if (!loc.isCart && !CMCS.refill.ranHere(job) && age < RESULT_OWNER_MS) {
+      clearTimeout(ownerTimer);
+      ownerTimer = setTimeout(render, RESULT_OWNER_MS - age + 50);
+      return;
+    }
+    if (document.visibilityState !== 'visible') {
+      if (!waitingToBeSeen) {
+        waitingToBeSeen = true;
+        document.addEventListener('visibilitychange', () => { waitingToBeSeen = false; render(); }, { once: true });
+      }
+      return;
+    }
+    saidJobs.add(job.id);
+    saidResult = job;
+    resultClosed = false;
+    if (loc.isCart) {
+      // The cart page reloads right after a refill: closed once it has really been seen.
+      setTimeout(() => {
+        if (saidResult && saidResult.id === job.id && document.visibilityState === 'visible') acknowledgeJob();
+      }, RESULT_SEEN_MS);
+      return;
+    }
+    acknowledgeJob();
+    showStrip(resultText(job), job.added > 0 && !job.undone ? { label: t('undo'), onClick: () => undoJob(job) } : null);
+  }
+  function closeResult() {
+    resultClosed = true;
+    acknowledgeJob();
+    render();
+  }
+
+  /** On the cart page: the last refill's result on top of the panel, with Undo. */
+  function resultBanner(job) {
+    const undo = undoState && undoState.jobId === job.id ? undoState : null;
+    const error = job.error && job.error !== 'cancelled' ? ui.errorText(job.error) : null;
+    const favorites = failedOf(job).filter(({ favorite }) => favorite);
+    return h(
+      'div',
+      { class: `cmcs-result ${resultNeedsYou(job) ? 'cmcs-result--warn' : ''}`, role: 'status' },
+      h(
+        'div',
+        { class: 'cmcs-result-text' },
+        h('strong', null, resultText(job)),
+        error ? h('span', { class: 'cmcs-error' }, error) : null,
+        favorites.length ? h('span', { class: 'cmcs-muted' }, t('resultFavoritesFailed', favorites.map(({ item }) => item.name).join(', '))) : null,
+        undo && undo.running ? h('span', { class: 'cmcs-muted' }, t('undoRunning')) : null,
+        undo && undo.error ? h('span', { class: 'cmcs-error' }, undo.error === 'busy' ? t('errorBusy') : ui.errorText(undo.error) || t('errorUnknown')) : null,
+        job.added > 0 && !job.undone
+          ? h('span', null, h('button', { type: 'button', class: 'cmcs-link', disabled: Boolean(undo && undo.running), onclick: () => undoJob(job) }, t('undo')))
+          : null,
+      ),
+      ui.iconButton(t('close'), 'close', closeResult),
+    );
+  }
+
   async function saveCartNow() {
     const cart = cm.readCartDocument(document, { baseUrl: location.href, lang: loc.lang, game: loc.game });
     await store.syncCart(cart.items, { addNew: true, markMissing: false });
@@ -470,16 +561,12 @@
   }
 
   function summaryView(job) {
-    // What did not make it: saved articles, and favourites (which are not on the list).
-    const failed = Object.entries(job.results || {})
-      .filter(([, result]) => !result.ok)
-      .map(([id, result]) => ({ item: state.items[id] || state.favorites[id], result, favorite: !state.items[id] }))
-      .filter(({ item }) => item);
+    const failed = failedOf(job);
     const error = ui.errorText(job.error);
     const undo = undoState && undoState.jobId === job.id ? undoState : null;
     return shell(
       { title: error && job.error !== 'cancelled' ? t('refillStoppedTitle') : t('refillDoneTitle'), onClose: acknowledgeJob },
-      h('p', { class: 'cmcs-lead' }, t('refillSummary', job.added || 0, job.failed || 0)),
+      h('p', { class: 'cmcs-lead' }, resultText(job)),
       ui.jobError(job),
       undo && undo.running ? h('p', { class: 'cmcs-muted' }, t('undoRunning')) : null,
       undo && undo.error
@@ -557,8 +644,9 @@
   }
 
   async function findReplacement(item) {
-    if (replacing && replacing.id === item.articleId && !replacing.loading) {
-      replacing = null; // second click closes it
+    if (replacing && replacing.id === item.articleId) {
+      // A second click closes it, also while it is still searching (that answer is then dropped).
+      replacing = null;
       return render();
     }
     replacing = { id: item.articleId, loading: true };
@@ -614,7 +702,12 @@
         );
       });
     }
-    return h('div', { class: 'cmcs-replace' }, h('div', { class: 'cmcs-replace-title' }, t('replaceTitle')), body);
+    return h(
+      'div',
+      { class: 'cmcs-replace' },
+      h('div', { class: 'cmcs-replace-title' }, h('span', null, t('replaceTitle')), ui.iconButton(t('close'), 'close', () => findReplacement(item))),
+      body,
+    );
   }
 
   /** A sold article: grey, with the SOLD stamp, "Find a replacement" and its suggestions. */
@@ -622,24 +715,30 @@
     const alt = cm.alternativesUrl(item);
     // In the interface's words; Cardmarket's own (in the site's language) in the tooltip.
     const why = (attempt && !attempt.ok && ui.refusal(attempt)) || { text: t('notAvailableAnymore'), raw: null };
+    const open = replacing && replacing.id === item.articleId;
     return [
       ui.itemRow(item, {
         sold: true,
         withGame: multiGame,
         note: why ? why.text : null,
         noteTitle: why ? why.raw : null,
-        below: alt ? h('button', { type: 'button', class: 'cmcs-link', onclick: () => findReplacement(item) }, t('replaceFind')) : null,
-        actions: [
-          state.items[item.articleId] ? ui.iconButton(t('refillOne'), 'refresh', () => refill([item.articleId])) : null,
-          alt ? ui.iconLink(t('findAlternative'), 'search', alt) : null,
-          ui.iconButton(t('removeFromSaved'), 'close', remove),
+        open: openId === item.articleId,
+        onToggle: toggleRow(item.articleId),
+        below: alt
+          ? h('button', { type: 'button', class: 'cmcs-link', 'aria-expanded': String(Boolean(open)), onclick: () => findReplacement(item) }, open ? t('replaceHide') : t('replaceFind'))
+          : null,
+        // Room for the name: the rarer actions wait in the opened row.
+        details: [
+          state.items[item.articleId] ? ui.detailButton(t('retryOne'), () => refill([item.articleId])) : null,
+          alt ? ui.detailButton(t('findAlternative'), null, { href: alt }) : null,
         ].filter(Boolean),
+        actions: [ui.iconButton(t('removeFromSaved'), 'close', remove)],
       }),
       replacementPanel(item),
     ];
   };
 
-  function cartView(missing, unavailable, inCart, ignored) {
+  function cartView(missing, unavailable, inCart, ignored, result) {
     if (state.meta.collapsed) {
       const attention = missing.length + unavailable.length;
       return h(
@@ -656,6 +755,7 @@
 
     // The big picture first.
     const body = [];
+    if (result) body.push(resultBanner(result));
     if (missing.length) {
       const emptied = missing.every((item) => item.missingReason === 'emptied');
       body.push(
@@ -740,7 +840,7 @@
           }),
           // The same as in the popup: put back, open, similar offers, star, remove.
           details: [
-            ui.detailButton(t('detailRefillOne'), () => refill([item.articleId]), { strong: true }),
+            ui.detailButton(t('detailRefillOne'), () => { openId = null; refill([item.articleId]); }, { strong: true }),
             ui.detailButton(t('detailOpen'), null, { href: cm.offerUrl(item) || item.productUrl }),
             ui.detailButton(t('detailIgnore'), () => ignoreItems([item.articleId]), { title: t('ignoreHint') }),
             cm.alternativesUrl(item)
@@ -756,90 +856,51 @@
         });
       const groups = store.groupBy([...missing].sort(bySellerName), (item) => item.seller || '—');
       body.push(
-        h(
-          'div',
-          { class: 'cmcs-row-between' },
-          h('div', { class: 'cmcs-section-title' }, t('groupMissing', missing.length)),
-          h(
-            'button',
-            {
-              type: 'button',
-              class: 'cmcs-link',
-              onclick: () => {
-                missing.forEach((item) => (allSelected ? deselected.add(item.articleId) : deselected.delete(item.articleId)));
-                render();
-              },
-            },
-            allSelected ? t('selectNone') : t('selectAll'),
-          ),
-        ),
+        ui.sectionHead(t('groupMissing', missing.length), [
+          ui.sectionLink(allSelected ? t('selectNone') : t('selectAll'), () => {
+            missing.forEach((item) => (allSelected ? deselected.add(item.articleId) : deselected.delete(item.articleId)));
+            render();
+          }),
+        ]),
         gameChips(missing),
         h('div', { class: 'cmcs-list' }, [...groups.entries()].map(([seller, list]) => sellerGroup(seller, list, row))),
-        selected.length
-          ? h(
-              'div',
-              { class: 'cmcs-links' },
-              h(
-                'button',
-                { type: 'button', class: 'cmcs-link', title: t('ignoreHint'), onclick: () => ignoreItems(selected.map((item) => item.articleId)) },
-                t('ignoreSelected', String(store.copiesToReturn(selected))),
-              ),
-            )
-          : null,
       );
     }
 
     if (unavailable.length) {
       body.push(
-        h(
-          'div',
-          { class: 'cmcs-row-between' },
-          h('div', { class: 'cmcs-section-title' }, t('groupUnavailable', unavailable.length)),
-          h('button', { type: 'button', class: 'cmcs-link', onclick: () => removeItems(unavailable.map((item) => item.articleId)) }, t('clearUnavailable')),
-        ),
+        ui.sectionHead(t('groupUnavailable', unavailable.length), [
+          ui.sectionLink(t('retryUnavailable'), () => refill(unavailable.map((item) => item.articleId))),
+          ui.sectionLink(t('clearUnavailable'), () => removeItems(unavailable.map((item) => item.articleId))),
+        ]),
         h('div', { class: 'cmcs-list' }, unavailable.map((item) => unavailableRow(item, { multiGame }))),
-        h(
-          'div',
-          { class: 'cmcs-links' },
-          h('button', { type: 'button', class: 'cmcs-link', onclick: () => refill(unavailable.map((item) => item.articleId)) }, t('retryUnavailable')),
-        ),
       );
     }
 
     if (ignored.length) {
       body.push(
-        h(
-          'div',
-          { class: 'cmcs-fold-line' },
-          h('span', null, t('sectionIgnored', String(ignored.length))),
-          h(
-            'button',
-            { type: 'button', class: 'cmcs-link', 'aria-expanded': String(showIgnored), onclick: () => { showIgnored = !showIgnored; render(); } },
-            showIgnored ? t('hide') : t('show'),
-          ),
-        ),
+        ui.sectionHead(t('sectionIgnored', String(ignored.length)), [
+          showIgnored ? ui.sectionLink(t('clearUnavailable'), () => removeItems(ignored.map((item) => item.articleId))) : null,
+          ui.sectionLink(showIgnored ? t('hide') : t('show'), () => {
+            showIgnored = !showIgnored;
+            render();
+          }, { 'aria-expanded': String(showIgnored) }),
+        ]),
         showIgnored
-          ? [
-              h(
-                'div',
-                { class: 'cmcs-list' },
-                ignored.map((item) =>
-                  ui.itemRow(item, {
-                    withGame: multiGame,
-                    href: cm.offerUrl(item) || item.productUrl,
-                    actions: [
-                      ui.iconButton(t('refillOne'), 'refresh', () => refill([item.articleId])),
-                      ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item.articleId])),
-                    ],
-                  }),
-                ),
+          ? h(
+              'div',
+              { class: 'cmcs-list' },
+              ignored.map((item) =>
+                ui.itemRow(item, {
+                  withGame: multiGame,
+                  href: cm.offerUrl(item) || item.productUrl,
+                  actions: [
+                    ui.iconButton(t('refillOne'), 'refresh', () => refill([item.articleId])),
+                    ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item.articleId])),
+                  ],
+                }),
               ),
-              h(
-                'div',
-                { class: 'cmcs-links' },
-                h('button', { type: 'button', class: 'cmcs-link', onclick: () => removeItems(ignored.map((item) => item.articleId)) }, t('clearUnavailable')),
-              ),
-            ]
+            )
           : null,
       );
     }
@@ -856,10 +917,20 @@
       );
     }
 
+    // The selection's two actions together: put back (the big one), or ignore.
     const footer = missing.length
-      ? ui.primaryButton(t('refillButton', store.copiesToReturn(selected)), store.formatPrice(refillValue(selected)), () => refill(selected.map((item) => item.articleId)), {
-          disabled: !selected.length,
-        })
+      ? ui.footBar(
+          ui.primaryButton(t('refillButton', store.copiesToReturn(selected)), store.formatPrice(refillValue(selected)), () => refill(selected.map((item) => item.articleId)), {
+            disabled: !selected.length,
+          }),
+          selected.length
+            ? h(
+                'button',
+                { type: 'button', class: 'cmcs-btn cmcs-btn--ghost', title: t('ignoreHint'), onclick: () => ignoreItems(selected.map((item) => item.articleId)) },
+                t('ignoreCount', String(store.copiesToReturn(selected))),
+              )
+            : null,
+        )
       : null;
     return shell({ onCollapse: () => setCollapsed(true), footer }, body);
   }
@@ -867,7 +938,13 @@
   /** Saved lists on the cart page: save the current list under a name, or put a saved one back. */
   function listsSection(savable) {
     const carts = state.carts || [];
-    const parts = [];
+    if (!carts.length && !savable && !listForm) return null;
+    // One section: its head says how many lists there are, and offers to save one more.
+    const parts = [
+      ui.sectionHead(t('panelListsTitle', String(carts.length)), [
+        savable && !listForm ? ui.sectionLink(t('listsSaveOpen'), () => { listForm = { name: '' }; render(); }) : null,
+      ]),
+    ];
     if (listForm) {
       parts.push(
         h(
@@ -893,14 +970,9 @@
           h('button', { type: 'button', class: 'cmcs-link', onclick: () => { listForm = null; render(); } }, t('cancel')),
         ),
       );
-    } else if (savable) {
-      parts.push(
-        h('div', { class: 'cmcs-links' }, h('button', { type: 'button', class: 'cmcs-link', onclick: () => { listForm = { name: '' }; render(); } }, t('listsSaveOpen'))),
-      );
     }
     if (carts.length) {
       parts.push(
-        h('div', { class: 'cmcs-section-title' }, t('panelListsTitle', String(carts.length))),
         carts.map((cart) =>
           h(
             'div',
@@ -916,7 +988,7 @@
         ),
       );
     }
-    return parts.length ? h('div', { class: 'cmcs-lists' }, parts) : null;
+    return h('div', { class: 'cmcs-lists' }, parts);
   }
 
   /** "Cardmarket empties your cart at 14:35 (in 23 min)", when the cart page said so. */
@@ -1073,20 +1145,26 @@
     unavailable.sort(bySellerName);
     ignored.sort(bySellerName);
 
+    // The last refill: what went fully right is said once; what needs you stays until closed.
+    const fresh = freshResult(job) ? job : null;
+    if (fresh && !resultNeedsYou(fresh)) sayResultOnce(fresh);
+    const banner =
+      fresh && resultNeedsYou(fresh) ? fresh : saidResult && !resultClosed && (!job || job.id === saidResult.id) ? { ...saidResult, ...(job || {}) } : null;
+
     let view = null;
     let name = null;
     if (state.interrupted) {
       [view, name] = [interruptedView(job), 'interrupted'];
     } else if (store.isJobActive(job)) {
       [view, name] = [progressView(job), 'progress'];
-    } else if (job && job.finishedAt && !job.acknowledged && Date.now() - job.finishedAt < SUMMARY_TTL_MS) {
-      [view, name] = [summaryView(job), 'summary'];
+    } else if (fresh && resultNeedsYou(fresh) && !loc.isCart) {
+      [view, name] = [summaryView(fresh), 'summary'];
     } else if (notice) {
       [view, name] = [noticeView(), 'notice'];
     } else if (otherAccount) {
       [view, name] = [accountView(meta.account, meta.accountMismatch), 'account'];
     } else if (loc.isCart && (forGame.length || (state.carts || []).length || !settings.autoTrack)) {
-      [view, name] = [cartView(missing, unavailable, inCart, ignored), 'cart'];
+      [view, name] = [cartView(missing, unavailable, inCart, ignored, banner), 'cart'];
     } else if (
       !loc.isCart &&
       missing.length &&

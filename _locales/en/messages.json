@@ -83,11 +83,8 @@
   "clearConfirm": {
     "message": "Delete all saved articles, favourites and saved lists? This cannot be undone."
   },
-  "clearSelection": {
-    "message": "Clear selection"
-  },
   "clearUnavailable": {
-    "message": "Clear list"
+    "message": "Clear"
   },
   "cleared": {
     "message": "All saved articles, favourites and saved lists were deleted."
@@ -212,11 +209,11 @@
   "favAdd": {
     "message": "Save as favourite"
   },
-  "favAddSelected": {
-    "message": "Put $1 in cart"
-  },
   "favAddToCart": {
     "message": "Put in cart"
+  },
+  "favAllInCart": {
+    "message": "Already in your cart"
   },
   "favAvailable": {
     "message": "$1 available"
@@ -226,6 +223,9 @@
   },
   "favEmptyTitle": {
     "message": "No favourites yet"
+  },
+  "favInCartCount": {
+    "message": "$1 already in your cart"
   },
   "favInCartNote": {
     "message": "In your cart"
@@ -260,6 +260,9 @@
   "favSellerOffers": {
     "message": "Find at this seller"
   },
+  "favToCart": {
+    "message": "Put $1 in your cart"
+  },
   "findAlternative": {
     "message": "Find a similar offer"
   },
@@ -293,11 +296,11 @@
   "howTitle": {
     "message": "How it works"
   },
+  "ignoreCount": {
+    "message": "Ignore $1"
+  },
   "ignoreHint": {
     "message": "Stop reminding me and do not put it back. If it shows up in your cart again, it counts again."
-  },
-  "ignoreSelected": {
-    "message": "Ignore selected ($1)"
   },
   "ignoredMany": {
     "message": "$1 articles ignored."
@@ -512,9 +515,6 @@
   "refillStoppedTitle": {
     "message": "Stopped"
   },
-  "refillSummary": {
-    "message": "$1 put in your cart, $2 not added."
-  },
   "refillWaiting": {
     "message": "Waiting for Cardmarket to open…"
   },
@@ -563,6 +563,9 @@
   "replaceFind": {
     "message": "Find a replacement"
   },
+  "replaceHide": {
+    "message": "Hide replacement"
+  },
   "replaceInCart": {
     "message": "Seller already in your cart: no extra shipping"
   },
@@ -587,8 +590,26 @@
   "replaceTitle": {
     "message": "Replacement"
   },
+  "resultBack": {
+    "message": "$1 articles back in your cart."
+  },
+  "resultBackOne": {
+    "message": "1 article back in your cart."
+  },
+  "resultFailed": {
+    "message": "$1 did not work."
+  },
+  "resultFailedOne": {
+    "message": "1 did not work."
+  },
+  "resultFavoritesFailed": {
+    "message": "Favourites that did not work: $1."
+  },
+  "retryOne": {
+    "message": "Try again"
+  },
   "retryUnavailable": {
-    "message": "Try again anyway"
+    "message": "Try again"
   },
   "saveCartNow": {
     "message": "Read the cart now"

@@ -83,11 +83,8 @@
   "clearConfirm": {
     "message": "Alle opgeslagen artikelen, favorieten en bewaarde lijsten wissen? Dit kan niet ongedaan worden gemaakt."
   },
-  "clearSelection": {
-    "message": "Wis selectie"
-  },
   "clearUnavailable": {
-    "message": "Lijst opschonen"
+    "message": "Opschonen"
   },
   "cleared": {
     "message": "Alle opgeslagen artikelen, favorieten en bewaarde lijsten zijn gewist."
@@ -212,11 +209,11 @@
   "favAdd": {
     "message": "Bewaar als favoriet"
   },
-  "favAddSelected": {
-    "message": "Zet $1 in mandje"
-  },
   "favAddToCart": {
     "message": "In winkelmandje leggen"
+  },
+  "favAllInCart": {
+    "message": "Zit al in je mandje"
   },
   "favAvailable": {
     "message": "$1 beschikbaar"
@@ -226,6 +223,9 @@
   },
   "favEmptyTitle": {
     "message": "Nog geen favorieten"
+  },
+  "favInCartCount": {
+    "message": "$1 al in je mandje"
   },
   "favInCartNote": {
     "message": "In je mandje"
@@ -260,6 +260,9 @@
   "favSellerOffers": {
     "message": "Zoek bij deze verkoper"
   },
+  "favToCart": {
+    "message": "Zet $1 in je mandje"
+  },
   "findAlternative": {
     "message": "Zoek vergelijkbaar aanbod"
   },
@@ -293,11 +296,11 @@
   "howTitle": {
     "message": "Zo werkt het"
   },
+  "ignoreCount": {
+    "message": "Negeer $1"
+  },
   "ignoreHint": {
     "message": "Niet meer melden en niet meer terugzetten. Komt het weer in je mandje, dan telt het weer mee."
-  },
-  "ignoreSelected": {
-    "message": "Geselecteerde negeren ($1)"
   },
   "ignoredMany": {
     "message": "$1 artikelen genegeerd."
@@ -512,9 +515,6 @@
   "refillStoppedTitle": {
     "message": "Gestopt"
   },
-  "refillSummary": {
-    "message": "$1 in je mandje gezet, $2 niet gelukt."
-  },
   "refillWaiting": {
     "message": "Wachten tot Cardmarket opent…"
   },
@@ -563,6 +563,9 @@
   "replaceFind": {
     "message": "Vervanging zoeken"
   },
+  "replaceHide": {
+    "message": "Verberg vervanging"
+  },
   "replaceInCart": {
     "message": "Verkoper zit al in je mandje: geen extra verzendkosten"
   },
@@ -587,8 +590,26 @@
   "replaceTitle": {
     "message": "Vervanging"
   },
+  "resultBack": {
+    "message": "$1 artikelen terug in je mandje."
+  },
+  "resultBackOne": {
+    "message": "1 artikel terug in je mandje."
+  },
+  "resultFailed": {
+    "message": "$1 lukten niet."
+  },
+  "resultFailedOne": {
+    "message": "1 lukte niet."
+  },
+  "resultFavoritesFailed": {
+    "message": "Favorieten die niet lukten: $1."
+  },
+  "retryOne": {
+    "message": "Opnieuw proberen"
+  },
   "retryUnavailable": {
-    "message": "Toch opnieuw proberen"
+    "message": "Opnieuw proberen"
   },
   "saveCartNow": {
     "message": "Mandje nu inlezen"

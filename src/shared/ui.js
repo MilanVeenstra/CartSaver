@@ -270,7 +270,6 @@
             noteText,
           )
         : null,
-      opts.below || null,
     );
 
     // The part that opens the row; a checkbox in front and buttons behind it stay
@@ -337,6 +336,8 @@
         dataset: { articleId: item.articleId },
       },
       row,
+      // Outside the part that opens the row: a button inside a button would swallow its click.
+      opts.below ? h('div', { class: 'cmcs-item-below' }, opts.below) : null,
       details,
     );
   }
@@ -377,6 +378,18 @@
       h('p', { class: stopped ? 'cmcs-error' : 'cmcs-muted' }, errorText(job.error)),
       stopped && job.errorDetail ? h('p', { class: 'cmcs-detail' }, CMCS.t('errorDetails', job.errorDetail)) : null,
     ].filter(Boolean);
+  }
+
+  /** A refill's outcome in one sentence: "2 articles back in your cart. 1 did not work." */
+  function resultText(job) {
+    const added = job.added || 0;
+    const failed = job.failed || 0;
+    return [
+      added || !failed ? CMCS.tn('resultBack', added, String(added)) : null,
+      failed ? CMCS.tn('resultFailed', failed, String(failed)) : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
   }
 
   /** A neutral card-shaped stand-in when there is no picture (or it cannot load). */
@@ -425,6 +438,31 @@
       h('span', null, label),
       trailing == null ? icon('arrowRight') : h('span', { class: 'cmcs-primary-amount' }, trailing),
     );
+  }
+
+  /**
+   * The head of a section, the same everywhere: "Title (count)" on the left and
+   * that section's own actions (small text buttons) on the right.
+   */
+  function sectionHead(title, actions = []) {
+    const links = actions.filter(Boolean);
+    return h(
+      'div',
+      { class: 'cmcs-section-head' },
+      h('span', { class: 'cmcs-section-title' }, title),
+      links.length ? h('span', { class: 'cmcs-section-actions' }, links) : null,
+    );
+  }
+
+  /** A small text button for a section head ("Select none", "Clear list"). */
+  const sectionLink = (label, onClick, attrs = {}) => h('button', { type: 'button', class: 'cmcs-link', onclick: onClick, ...attrs }, label);
+
+  /**
+   * The bottom bar: the one big button, optionally with a second, quieter one
+   * before it for the same selection ("Ignore 3" next to "Put 3 back").
+   */
+  function footBar(primary, secondary = null) {
+    return h('div', { class: 'cmcs-foot-bar' }, secondary, primary);
   }
 
   /** Design tokens and shared components (light + dark). */
@@ -493,6 +531,10 @@
     .cmcs-primary:disabled { background: var(--cmcs-line); color: var(--cmcs-disabled); cursor: default; }
     .cmcs-primary svg { width: 16px; height: 16px; flex: none; }
     .cmcs-primary-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cmcs-foot-bar { display: flex; gap: 8px; align-items: stretch; }
+    .cmcs-foot-bar .cmcs-primary { flex: 1; min-width: 0; }
+    .cmcs-foot-bar .cmcs-primary > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cmcs-foot-bar .cmcs-btn { flex: none; white-space: nowrap; }
     .cmcs-btn {
       appearance: none; border: 1.5px solid var(--cmcs-primary-bg); border-radius: 0;
       padding: 6px 12px; font: inherit; font-weight: 700; cursor: pointer;
@@ -580,7 +622,10 @@
     .cmcs-chip[aria-pressed="true"]::before { content: "✓ "; }
     .cmcs-chip[aria-pressed="false"] { color: var(--cmcs-disabled); text-decoration: line-through; }
     .cmcs-section-title { font-size: 12px; color: var(--cmcs-muted); margin: 14px 0 4px; font-weight: 400; }
-    .cmcs-fold-line { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: var(--cmcs-muted); margin: 14px 0 4px; }
+    .cmcs-section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; margin: 18px 0 4px; }
+    .cmcs-section-head .cmcs-section-title { margin: 0; white-space: nowrap; }
+    .cmcs-section-actions { display: flex; gap: 12px; margin-left: auto; }
+    .cmcs-item-below { padding: 0 0 8px 40px; margin-top: -6px; }
     .cmcs-seller {
       appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; width: 100%;
       display: flex; align-items: center; gap: 10px; padding: 12px 0 4px; font-size: 12px; text-align: left;
@@ -630,6 +675,10 @@
     setThumbs,
     setPsa,
     psaInfo,
+    resultText,
+    sectionHead,
+    sectionLink,
+    footBar,
     dollars,
     STYLES,
   };

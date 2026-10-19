@@ -92,6 +92,19 @@ async function runViaNewTab(locator) {
 
 const addRequests = () => mock.state.requests.filter((r) => r.method === 'POST' && r.path.includes('/AjaxAction/ShoppingCart_'));
 
+/**
+ * Close the last refill's result when it is still shown. A refill that went
+ * fully right is only said once (a strip, or a line in the cart view) and
+ * closes by itself; one with failures waits for "Close".
+ */
+async function closeResult(page) {
+  const close = page
+    .locator('cmcs-cart-saver')
+    .locator('.cmcs-panel[data-view="summary"] .cmcs-head [aria-label="Sluiten"], .cmcs-result [aria-label="Sluiten"]')
+    .first();
+  if (await close.isVisible().catch(() => false)) await close.click();
+}
+
 before(async () => {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcs-profile-'));
   context = await chromium.launchPersistentContext(userDataDir, {
@@ -227,18 +240,20 @@ describe('Cardmarket Cart Saver', () => {
       assert.ok(posts[i].at - posts[i - 1].at >= DELAY_MS, 'requests are spaced out');
     }
 
-    await waitFor(async () => /2 in je mandje gezet, 1 niet gelukt/.test(await widget(page).innerText()), 'summary');
+    await waitFor(async () => /2 artikelen terug in je mandje\. 1 lukte niet\./.test(await widget(page).innerText()), 'summary');
     assert.equal(await sw.evaluate(() => chrome.action.getBadgeText({})), '');
     await shot(widget(page), '03-refill-summary');
   });
 
   it('lists unavailable articles on the cart page with a link to similar offers', async () => {
-    await widget(page).getByRole('button', { name: 'Sluiten' }).first().click();
+    await closeResult(page);
     await page.goto(`${CM}/en/Magic/ShoppingCart`);
     await waitFor(() => widget(page).isVisible(), 'cart panel');
     const text = await widget(page).innerText();
     assert.match(text, /3 artikelen in je mandje zijn opgeslagen/);
     assert.match(text, /Niet meer beschikbaar \(1\)/i);
+    // The rarer actions of a sold article wait in its opened row.
+    await widget(page).locator(`.cmcs-item--unavailable[data-article-id="${EPHEMERATE}"] .cmcs-item-line`).click();
     const alt = widget(page).getByRole('link', { name: 'Zoek vergelijkbaar aanbod' });
     assert.equal(
       await alt.getAttribute('href'),
@@ -975,7 +990,7 @@ describe('Cardmarket Cart Saver', () => {
 
     it('tries one copy when the seller has fewer left than you want', async (t) => {
       t.after(() => mock.state.stock.clear());
-      await widget(page).getByRole('button', { name: 'Sluiten' }).first().click();
+      await closeResult(page);
       mock.state.cart.delete(BOG);
       mock.state.stock.set(BOG, 1);
       await page.goto(`${CM}/en/Magic`);
@@ -1010,7 +1025,7 @@ describe('Cardmarket Cart Saver', () => {
       assert.equal(mage.lastAttempt.reason, 'unknown');
       assert.equal(mage.lastAttempt.message, 'Something went wrong. Please try again.');
 
-      await widget(page).getByRole('button', { name: 'Sluiten' }).first().click();
+      await closeResult(page);
       await refillVia(widget(page).getByRole('button', { name: /^Zet 1 terug in je mandje/ }));
       mage = (await items())[MAGE];
       assert.equal(mage.status, 'unavailable', 'the second unclear refusal in a row counts as gone');
@@ -1025,7 +1040,7 @@ describe('Cardmarket Cart Saver', () => {
       await page.goto(`${CM}/en/Magic`);
       for (let round = 0; round < 2; round += 1) {
         await refillVia(widget(page).getByRole('button', { name: /^Zet 2 terug in je mandje/ }));
-        await widget(page).getByRole('button', { name: 'Sluiten' }).first().click();
+        await closeResult(page);
       }
       const all = await items();
       assert.equal(all[MAGE].status, 'missing', 'still on the list, to try again later');
@@ -1082,7 +1097,7 @@ describe('Cardmarket Cart Saver', () => {
       await widget(page).getByRole('button', { name: /^Doorgaan \(\d te gaan\)$/ }).click();
       await waitFor(async () => {
         const j = (await storage())['cmcs.job'];
-        return j && j.state === 'done' && j.acknowledged !== true && j;
+        return j && j.state === 'done' && j;
       }, 'continued job done');
       for (const id of [MAGE, SOL_RING, SOL_KINGDOM]) assert.equal(mock.state.cart.get(id), 1, `${id} added exactly once`);
       const all = await items();
@@ -1094,7 +1109,7 @@ describe('Cardmarket Cart Saver', () => {
         mock.state.username = 'tester';
         await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.meta': {} }));
       });
-      await widget(page).getByRole('button', { name: 'Sluiten' }).first().click();
+      await closeResult(page);
       assert.equal((await storage())['cmcs.meta'].account, 'tester');
       mock.state.username = 'someone-else';
       mock.state.cart.clear();
@@ -1541,7 +1556,7 @@ describe('Cardmarket Cart Saver', () => {
 
       // On other pages the reminder offers one game too.
       await page.goto(`${CM}/en/Pokemon`);
-      await widget(page).getByRole('button', { name: 'Sluiten' }).first().click().catch(() => {});
+      await closeResult(page);
       await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.job': null }));
       mock.state.cart.delete(PIKACHU);
       await page.goto(`${CM}/en/Magic`);
@@ -1624,7 +1639,8 @@ describe('Cardmarket Cart Saver', () => {
     });
 
     it('undoes a refill from the popup, through an open Cardmarket tab', async () => {
-      await sw.evaluate(() => chrome.storage.local.get('cmcs.job').then(({ 'cmcs.job': job }) => chrome.storage.local.set({ 'cmcs.job': { ...job, acknowledged: false } })));
+      // A fresh result the popup has not shown yet (it shows a result that went right once).
+      await sw.evaluate(() => chrome.storage.local.get('cmcs.job').then(({ 'cmcs.job': job }) => chrome.storage.local.set({ 'cmcs.job': { ...job, id: `${job.id}-again`, acknowledged: false } })));
       const popup = await openPopup();
       await popup.locator('#job').getByRole('button', { name: 'Ongedaan maken' }).click();
       await waitFor(async () => /1 artikel weer uit je mandje gehaald/.test(await popup.locator('#toast').innerText()), 'undone');
@@ -1674,9 +1690,12 @@ describe('Cardmarket Cart Saver', () => {
       await popup.close();
     });
 
-    it('puts several favourites in the cart at once', async () => {
-      const favs = [SOL_KINGDOM, SOL_SAME_SELLER].map((id) => mock.article(id));
+    it('puts several favourites in the cart at once, skipping what is in it already', async () => {
+      const favs = [SOL_KINGDOM, SOL_SAME_SELLER, BOG].map((id) => mock.article(id));
       mock.state.available.set(SOL_SAME_SELLER, mock.article(SOL_SAME_SELLER));
+      // The Bog is a favourite that is in the cart already.
+      mock.state.cart.set(BOG, 1);
+      await patchItems({ [BOG]: { status: 'in_cart', amount: 1, wantedAmount: 1 } });
       await sw.evaluate(async (list) => {
         const favorites = {};
         for (const a of list) {
@@ -1691,9 +1710,10 @@ describe('Cardmarket Cart Saver', () => {
       }, favs);
       const popup = await openPopup();
       await popup.locator('#tab-fav').click();
-      for (const id of [SOL_KINGDOM, SOL_SAME_SELLER]) await popup.locator(`#fav-list [data-article-id="${id}"] input[type="checkbox"]`).check();
-      const job = await runViaNewTab(popup.locator('#fav-bar').getByRole('button', { name: 'Zet 2 in mandje' }));
-      assert.equal(job.articleIds.length, 2, 'one job for both');
+      await popup.locator('#fav-list .cmcs-section-head').getByRole('button', { name: 'Alles selecteren' }).click();
+      assert.match(await popup.locator('#fav-list .cmcs-section-head').innerText(), /3 favorieten · 3 geselecteerd · 1 al in je mandje/);
+      const job = await runViaNewTab(popup.locator('#foot').getByRole('button', { name: /^Zet 2 in je mandje/ }));
+      assert.equal(job.articleIds.length, 2, 'one job for both, without the one in the cart');
       assert.equal(job.added, 2);
       assert.equal(mock.state.cart.get(SOL_KINGDOM), 1);
       assert.equal(mock.state.cart.get(SOL_SAME_SELLER), 1);
@@ -1775,9 +1795,9 @@ describe('Cardmarket Cart Saver', () => {
       await panel.locator(`.cmcs-item[data-article-id="${MAGE}"]`).getByRole('button', { name: 'Negeren', exact: true }).click();
       await waitFor(async () => (await items())[MAGE].status === 'ignored', 'ignored');
       await waitFor(async () => (await badge()) === '2', 'badge without it');
-      assert.match(await panel.locator('.cmcs-fold-line').innerText(), /Genegeerd \(1\)/);
+      assert.match(await panel.locator('.cmcs-section-head', { hasText: 'Genegeerd' }).innerText(), /Genegeerd \(1\)/);
       assert.equal(await panel.locator(`.cmcs-item[data-article-id="${MAGE}"]`).count(), 0, 'folded away');
-      await panel.locator('.cmcs-fold-line').getByRole('button', { name: 'Toon' }).click();
+      await panel.locator('.cmcs-section-head', { hasText: 'Genegeerd' }).getByRole('button', { name: 'Toon' }).click();
       await waitFor(() => panel.locator(`.cmcs-item--ignored[data-article-id="${MAGE}"]`).isVisible(), 'listed under Ignored');
       await shot(panel, '22-ignored-section');
 
@@ -1795,11 +1815,11 @@ describe('Cardmarket Cart Saver', () => {
     it('ignores the ticked articles from the popup, one undo for several', async () => {
       const popup = await openPopup();
       await popup.getByRole('checkbox', { name: 'Bojuka Bog' }).uncheck();
-      await popup.getByRole('button', { name: 'Geselecteerde negeren (1)' }).click();
+      await popup.locator('#foot').getByRole('button', { name: 'Negeer 1' }).click();
       await waitFor(async () => (await items())[EPHEMERATE].status === 'ignored', 'the ticked one ignored');
       assert.equal((await items())[BOG].status, 'partial', 'the unticked one stays');
       await waitFor(async () => /“Ephemerate” genegeerd\./.test(await popup.locator('#toast').innerText()), 'toast');
-      assert.match(await popup.locator('#list .cmcs-fold-line').innerText(), /Genegeerd \(1\)/);
+      assert.match(await popup.locator('#list .cmcs-section-head', { hasText: 'Genegeerd' }).innerText(), /Genegeerd \(1\)/);
 
       // The Bog is listed twice: the copy that can go back, and the one in the cart.
       const bog = popup.locator(`#list .cmcs-item--partial[data-article-id="${BOG}"]`);
@@ -1954,6 +1974,85 @@ describe('Cardmarket Cart Saver', () => {
       await options.locator('#psaEstimate').uncheck();
       await waitFor(async () => !(await psa()), 'forgotten');
       await options.close();
+    });
+  });
+
+  describe('nothing stays behind', () => {
+    const openPopup = async () => {
+      const popup = await context.newPage();
+      await popup.setViewportSize({ width: 400, height: 600 });
+      await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+      await popup.locator('#tab-cart').click();
+      return popup;
+    };
+    const job = async () => (await storage())['cmcs.job'];
+
+    before(async () => {
+      // Only this tab: another Cardmarket tab or an open popup may see (and so close) a result first.
+      for (const other of context.pages()) if (other !== page) await other.close();
+      for (const id of [BOG, MAGE, SOL_RING]) mock.state.available.set(id, mock.article(id));
+      mock.state.cart = new Map([[BOG, 1], [MAGE, 1]]);
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.job': null, 'cmcs.meta': {}, 'cmcs.items': {}, 'cmcs.favorites': {} }));
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      await waitFor(async () => (await items())[MAGE]?.status === 'in_cart', 'saved');
+      mock.state.cart.clear();
+      await page.goto(`${CM}/en/Magic`);
+      await waitFor(async () => (await items())[MAGE]?.status === 'missing', 'emptied');
+    });
+
+    it('says a refill that went fully right once, in a strip, and then it is gone', async () => {
+      await widget(page).getByRole('button', { name: /^Zet 2 terug in je mandje/ }).click();
+      await waitFor(async () => /2 artikelen terug in je mandje\./.test(await widget(page).locator('.cmcs-strip').innerText().catch(() => '')), 'strip');
+      assert.equal(await widget(page).locator('[data-view="summary"]').count(), 0, 'not a view that stays');
+      await waitFor(async () => (await job())?.acknowledged === true, 'closed for the other pages and the popup');
+      await waitFor(async () => !(await widget(page).isVisible()), 'gone after the strip', 12000);
+    });
+
+    it('on the cart page the result stays on top through the reload, until you close it', async () => {
+      mock.state.cart.clear();
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      await widget(page).getByRole('button', { name: /^Zet 2 terug in je mandje/ }).click();
+      const banner = widget(page).locator('.cmcs-result');
+      // The page reloads after a refill; the result is on top of the cart view, not instead of it.
+      await page.waitForEvent('load');
+      await waitFor(async () => /2 artikelen terug in je mandje\./.test(await banner.innerText().catch(() => '')), 'result on top');
+      assert.match(await widget(page).innerText(), /in je mandje zijn opgeslagen/, 'the cart view underneath');
+      // Seen: closed for the other pages, but it stays here until you close it.
+      await waitFor(async () => (await job())?.acknowledged === true, 'seen', 10000);
+      await page.waitForTimeout(300);
+      assert.ok(await banner.isVisible(), 'still on top');
+      await shot(widget(page), '28-result-on-top');
+      await banner.getByRole('button', { name: 'Sluiten' }).click();
+      await waitFor(async () => (await banner.count()) === 0, 'closed');
+    });
+
+    it('closes the replacement suggestions again', async () => {
+      // The Mage was sold (and left the cart).
+      mock.state.cart.delete(MAGE);
+      await patchItems({ [MAGE]: { status: 'unavailable', lastAttempt: { at: Date.now(), ok: false, reason: 'sold', message: 'Sold' } } });
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      const row = widget(page).locator(`.cmcs-item[data-article-id="${MAGE}"]`);
+      const replace = widget(page).locator('.cmcs-replace');
+      await widget(page).getByRole('button', { name: 'Vervanging zoeken' }).click();
+      await waitFor(() => replace.isVisible(), 'suggestions open');
+      await widget(page).getByRole('button', { name: 'Verberg vervanging' }).click();
+      await waitFor(async () => (await replace.count()) === 0, 'closed with the link');
+      await widget(page).getByRole('button', { name: 'Vervanging zoeken' }).click();
+      await waitFor(() => replace.isVisible(), 'open again');
+      await replace.getByRole('button', { name: 'Sluiten' }).click();
+      await waitFor(async () => (await replace.count()) === 0, 'closed with ×');
+      assert.ok(await row.isVisible());
+    });
+
+    it('a row opened in the popup does not stay open in another tab', async () => {
+      await patchItems({ [BOG]: { status: 'missing' } });
+      const popup = await openPopup();
+      await popup.locator(`#list .cmcs-item[data-article-id="${BOG}"] .cmcs-item-line`).click();
+      assert.equal(await popup.locator('#list .cmcs-item--open').count(), 1);
+      await popup.locator('#tab-fav').click();
+      await popup.locator('#tab-cart').click();
+      assert.equal(await popup.locator('#list .cmcs-item--open').count(), 0);
+      await popup.close();
     });
   });
 
