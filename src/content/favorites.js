@@ -112,24 +112,43 @@
   /** Favourites seen on the page get their current price / stock. */
   async function refreshSeen(rows) {
     const patches = {};
+    const itemPatches = {};
+    const items = rows.length ? await store.getItems() : {};
+    const now = Date.now();
     for (const row of rows) {
       const articleId = row.id.replace(/\D+/g, '');
       const fav = favorites[articleId];
-      if (!fav) continue;
+      const item = items[articleId];
+      if (!fav && !item) continue;
       const seen = cm.parseOfferRow(row, { baseUrl: location.href });
       if (!seen) continue;
+      // A saved article seen on an offer page: its price now (and its history), and the seller's words.
+      if (item) {
+        const priced = store.notePrice(item, seen.price, now);
+        const comment = seen.comment && seen.comment !== item.comment ? seen.comment : undefined;
+        if (priced !== item || comment) {
+          itemPatches[articleId] = {
+            ...(priced !== item ? { price: priced.price, priceHistory: priced.priceHistory, priceChange: priced.priceChange } : {}),
+            ...(comment ? { comment } : {}),
+          };
+        }
+      }
+      if (!fav) continue;
+      const priced = store.notePrice(fav, seen.price, now);
       const next = {
-        price: seen.price != null ? seen.price : fav.price,
+        price: priced.price,
         available: seen.available != null ? seen.available : fav.available,
+        comment: seen.comment || fav.comment || null,
         unavailable: false,
         unavailableMessage: null,
       };
       // Only write when something changed (or once a day), so browsing stays quiet.
-      const changed = Object.entries(next).some(([key, value]) => (fav[key] ?? null) !== (value ?? null));
-      if (!changed && Date.now() - (fav.lastSeenAt || 0) < SEEN_REFRESH_MS) continue;
-      patches[articleId] = { ...next, lastSeenAt: Date.now() };
+      const changed = priced !== fav || Object.entries(next).some(([key, value]) => (fav[key] ?? null) !== (value ?? null));
+      if (!changed && now - (fav.lastSeenAt || 0) < SEEN_REFRESH_MS) continue;
+      patches[articleId] = { ...next, priceHistory: priced.priceHistory || fav.priceHistory, priceChange: priced.priceChange || null, lastSeenAt: now };
     }
     if (Object.keys(patches).length) await store.patchFavorites(patches);
+    if (Object.keys(itemPatches).length) await store.patchItems(itemPatches);
   }
 
   /** The offer the popup linked to (#articleRow<id>), until it has been shown. */

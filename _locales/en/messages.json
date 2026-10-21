@@ -95,6 +95,9 @@
   "collapse": {
     "message": "Minimise"
   },
+  "commentTitle": {
+    "message": "The seller's description: $1"
+  },
   "continueRefill": {
     "message": "Continue ($1 to go)"
   },
@@ -437,8 +440,29 @@
   "priceDown": {
     "message": "Price $1 lower (was $2)"
   },
+  "priceHistoryFirst": {
+    "message": "first price"
+  },
+  "priceHistoryMore": {
+    "message": "and $1 earlier prices"
+  },
+  "priceHistoryMoreOne": {
+    "message": "and 1 earlier price"
+  },
+  "priceHistoryOne": {
+    "message": "Since $1: $2. Not changed yet."
+  },
+  "priceHistoryTitle": {
+    "message": "Price history"
+  },
   "priceUp": {
     "message": "Price $1 higher (was $2)"
+  },
+  "pricesUpSummary": {
+    "message": "$1 articles got more expensive (+$2)."
+  },
+  "pricesUpSummaryOne": {
+    "message": "1 article got more expensive (+$2)."
   },
   "privacyNote": {
     "message": "Everything is kept in your own browser, and with sync on in your own browser account's sync. Cart Saver only talks to Cardmarket (the site, its pictures and, if you switch it on, the price guide), through your own session, and only if you switch on the PSA estimate also to PokemonPriceTracker."

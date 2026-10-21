@@ -356,7 +356,7 @@ export function createMockCardmarket() {
       <tr ${broken ? 'data-art' : 'data-article-id'}="${a.articleId}" data-product-id="${a.productId}" data-amount="${amount}"
           data-name="${esc(a.name)}" data-expansion="1533852000" data-expansion-name="${esc(a.expansion)}"
           data-number="${a.number}" data-rarity="20" ${a.condition ? `data-condition="${a.condition}"` : ''} data-language="${a.language}"
-          data-price="${a.price}" data-comment="">
+          data-price="${a.price}" data-comment="${esc(a.comment || '')}">
         <td class="select min-size"><div class="form-check no-label"><input type="checkbox" class="form-check-input"></div></td>
         <td class="preview min-size"><span data-bs-toggle="tooltip" class="thumbnail-icon icon is-24x24 is-magic"
             aria-label="${img}" data-bs-original-title="${img}"><span class="fonticon-camera"></span></span></td>
@@ -517,7 +517,7 @@ export function createMockCardmarket() {
             }
             ${flag(lang, a)}
             ${a.foil ? '<span aria-label="Foil" data-bs-original-title="Foil" class="icon st_SpecialIcon me-1"></span>' : ''}
-          </div></div></div>
+          </div>${a.comment ? `<div class="product-comments me-1 col"><span class="d-block text-truncate text-muted fst-italic small">${esc(a.comment)}</span></div>` : ''}</div></div>
         </div></div>
         <div class="col-offer col-auto">
           <div class="price-container d-none d-md-flex justify-content-end"><div class="d-flex flex-column"><div class="d-flex align-items-center justify-content-end">

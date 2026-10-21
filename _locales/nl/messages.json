@@ -95,6 +95,9 @@
   "collapse": {
     "message": "Minimaliseren"
   },
+  "commentTitle": {
+    "message": "Beschrijving van de verkoper: $1"
+  },
   "continueRefill": {
     "message": "Doorgaan ($1 te gaan)"
   },
@@ -437,8 +440,29 @@
   "priceDown": {
     "message": "Prijs $1 lager (was $2)"
   },
+  "priceHistoryFirst": {
+    "message": "eerste prijs"
+  },
+  "priceHistoryMore": {
+    "message": "en $1 eerdere prijzen"
+  },
+  "priceHistoryMoreOne": {
+    "message": "en 1 eerdere prijs"
+  },
+  "priceHistoryOne": {
+    "message": "Sinds $1: $2. Nog niet veranderd."
+  },
+  "priceHistoryTitle": {
+    "message": "Prijsverloop"
+  },
   "priceUp": {
     "message": "Prijs $1 hoger (was $2)"
+  },
+  "pricesUpSummary": {
+    "message": "$1 artikelen zijn duurder geworden (+$2)."
+  },
+  "pricesUpSummaryOne": {
+    "message": "1 artikel is duurder geworden (+$2)."
   },
   "privacyNote": {
     "message": "Alles wordt in je eigen browser bewaard, en met synchroniseren aan in de sync van je eigen browser-account. Cart Saver praat alleen met Cardmarket (de site, de plaatjes en, als je het aanzet, de prijsgids), via je eigen sessie, en alleen als je de PSA-schatting aanzet ook met PokemonPriceTracker."

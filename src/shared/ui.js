@@ -254,6 +254,10 @@
         ? null
         : h('div', { class: 'cmcs-item-meta' }, [shortMeta(item), opts.withGame && CMCS.store.gameName ? CMCS.store.gameName(item.game) : null].filter(Boolean).join(' · ')),
       opts.extraMeta ? h('div', { class: 'cmcs-item-meta' }, opts.extraMeta) : null,
+      // The seller's own description of this article, on one line (all of it when opened).
+      item.comment && !opts.open
+        ? h('div', { class: 'cmcs-item-meta cmcs-item-comment', title: t('commentTitle', item.comment) }, `“${item.comment}”`)
+        : null,
       (() => {
         const psa = !opts.sold && opts.psa !== false ? psaInfo(item) : null;
         return psa ? h('div', { class: 'cmcs-item-meta cmcs-psa', title: psa.title }, psa.text) : null;
@@ -322,7 +326,9 @@
         'div',
         { class: 'cmcs-item-details' },
         h('div', { class: 'cmcs-item-meta cmcs-wrap' }, longMeta),
+        item.comment ? h('div', { class: 'cmcs-item-meta cmcs-item-comment cmcs-wrap', title: t('commentTitle', item.comment) }, `“${item.comment}”`) : null,
         info.map((l) => h('div', { class: `cmcs-item-note ${l.warn ? 'cmcs-item-note--warn' : ''}`, title: l.raw || null }, l.text)),
+        opts.history === false ? null : priceHistoryBlock(item),
         opts.details && opts.details.length ? h('div', { class: 'cmcs-item-buttons' }, opts.details) : null,
       );
     }
@@ -338,6 +344,87 @@
       opts.below ? h('div', { class: 'cmcs-item-below' }, opts.below) : null,
       details,
     );
+  }
+
+  /** "19 Oct" (with the year when it is not this year). */
+  function shortDate(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const opts = { day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    return d.toLocaleDateString(CMCS.locale(), opts);
+  }
+
+  /** A small line chart of the prices (oldest left); the last point red when it went up. */
+  function sparkline(history) {
+    const W = 96;
+    const H = 24;
+    const prices = history.map((p) => p.price);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const x = (i) => (prices.length === 1 ? W / 2 : 3 + (i * (W - 6)) / (prices.length - 1));
+    const y = (v) => (max === min ? H / 2 : H - 3 - ((v - min) * (H - 6)) / (max - min));
+    const points = prices.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const up = prices.length > 1 && prices[prices.length - 1] > prices[prices.length - 2];
+    const last = prices.length - 1;
+    return svg(
+      `<svg xmlns="http://www.w3.org/2000/svg" class="cmcs-spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">` +
+        `<polyline points="${points}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` +
+        `<circle cx="${x(last).toFixed(1)}" cy="${y(prices[last]).toFixed(1)}" r="2.5" class="${up ? 'cmcs-spark-up' : 'cmcs-spark-dot'}"/></svg>`,
+    );
+  }
+
+  /**
+   * The price history of an article, for the opened row: newest first, with
+   * what each change was, and a small chart. Null without a known price.
+   */
+  function priceHistoryBlock(item) {
+    const t = CMCS.t;
+    const fmt = CMCS.store.formatPrice;
+    const history = CMCS.store.priceHistoryOf(item);
+    if (!history.length) return null;
+    if (history.length === 1) {
+      return h('div', { class: 'cmcs-history' }, h('div', { class: 'cmcs-item-note' }, t('priceHistoryOne', shortDate(history[0].at) || '—', fmt(history[0].price))));
+    }
+    const SHOWN = 5;
+    const rows = [];
+    for (let i = history.length - 1; i >= 0 && rows.length < SHOWN; i -= 1) {
+      const entry = history[i];
+      const before = i > 0 ? history[i - 1].price : null;
+      const diff = before == null ? null : entry.price - before;
+      rows.push(
+        h(
+          'div',
+          { class: 'cmcs-history-row' },
+          h('span', null, shortDate(entry.at) || '—'),
+          h('span', { class: 'cmcs-history-price' }, fmt(entry.price)),
+          h(
+            'span',
+            { class: diff == null ? 'cmcs-history-first' : diff > 0 ? 'cmcs-history-up' : 'cmcs-history-down' },
+            diff == null ? t('priceHistoryFirst') : `${diff > 0 ? '+' : '−'}${fmt(Math.abs(diff))}`,
+          ),
+        ),
+      );
+    }
+    const hidden = history.length - rows.length;
+    return h(
+      'div',
+      { class: 'cmcs-history', role: 'group', 'aria-label': t('priceHistoryTitle') },
+      h('div', { class: 'cmcs-history-head' }, h('span', null, t('priceHistoryTitle')), sparkline(history)),
+      rows,
+      hidden > 0 ? h('div', { class: 'cmcs-item-note' }, CMCS.tn('priceHistoryMore', hidden, hidden)) : null,
+    );
+  }
+
+  /** Articles that got more expensive lately, said in one line ("2 articles got more expensive (+€0.35)"). */
+  function pricesUpLine(list, now = Date.now()) {
+    const up = list.filter((item) => {
+      const c = item.priceChange;
+      return c && c.from != null && c.to != null && c.to > c.from && now - (c.at || 0) < PRICE_CHANGE_TTL_MS;
+    });
+    if (!up.length) return null;
+    const total = up.reduce((sum, item) => sum + (item.priceChange.to - item.priceChange.from) * (item.wantedAmount || item.amount || 1), 0);
+    return h('p', { class: 'cmcs-price-up', role: 'status' }, CMCS.tn('pricesUpSummary', up.length, up.length, CMCS.store.formatPrice(total)));
   }
 
   /** A text button for the opened row ("Only this one back", "On Cardmarket"). */
@@ -596,6 +683,18 @@
     .cmcs-item--ignored .cmcs-thumb { opacity: 0.55; }
     .cmcs-item-meta { font-size: 12px; color: var(--cmcs-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cmcs-wrap { white-space: normal; }
+    .cmcs-item-comment { font-style: italic; }
+    .cmcs-history { display: flex; flex-direction: column; gap: 1px; font-size: 12px; max-width: 280px; }
+    .cmcs-history-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--cmcs-muted); font-weight: 700; margin-bottom: 2px; }
+    .cmcs-history-row { display: grid; grid-template-columns: 1fr auto 72px; gap: 10px; font-variant-numeric: tabular-nums; }
+    .cmcs-history-price { font-weight: 700; text-align: right; }
+    .cmcs-history-up, .cmcs-history-down, .cmcs-history-first { text-align: right; }
+    .cmcs-history-up { color: var(--cmcs-red); font-weight: 700; }
+    .cmcs-history-down, .cmcs-history-first { color: var(--cmcs-muted); }
+    .cmcs-spark { display: block; color: var(--cmcs-muted); flex: none; }
+    .cmcs-spark-dot { fill: var(--cmcs-text); }
+    .cmcs-spark-up { fill: var(--cmcs-red); }
+    .cmcs-price-up { margin: 0; color: var(--cmcs-red); font-weight: 700; font-size: 12px; }
     .cmcs-item-note { font-size: 12px; color: var(--cmcs-muted); }
     .cmcs-item-note--warn { color: var(--cmcs-red); }
     .cmcs-item-side { flex: none; text-align: right; }
@@ -688,6 +787,9 @@
     sectionLink,
     footBar,
     dollars,
+    shortDate,
+    priceHistoryBlock,
+    pricesUpLine,
     STYLES,
   };
 })(globalThis);

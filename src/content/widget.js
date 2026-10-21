@@ -776,6 +776,7 @@
               .filter(Boolean)
               .join(' · '),
           ),
+          ui.pricesUpLine([...missing, ...inCart]),
           expiryLine(),
         ),
       );
@@ -798,6 +799,7 @@
           { class: 'cmcs-summary' },
           h('h2', { class: 'cmcs-summary-title' }, unavailable.length ? t('summaryAllInForSale') : t('summaryAllIn')),
           h('p', { class: 'cmcs-summary-sub' }, CMCS.tn('cartSavedLead', copies, copies)),
+          ui.pricesUpLine(inCart),
           expiryLine(),
         ),
       );

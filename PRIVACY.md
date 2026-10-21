@@ -2,7 +2,7 @@
 
 *Nederlands hieronder · English below*
 
-Laatst bijgewerkt: 19 oktober 2026 (versie 1.6.6).
+Laatst bijgewerkt: 21 oktober 2026 (versie 1.6.7).
 
 ## Nederlands
 
@@ -13,7 +13,8 @@ Cardmarket. Er is geen server van ons: niets van jou komt bij ons terecht.
 
 **Wat Cart Saver bewaart.**
 - De artikelen in je winkelmandje: kaart of product, verkoper, conditie, taal,
-  prijs, aantal, links en plaatjes.
+  prijs, aantal, links en plaatjes, de beschrijving die de verkoper bij het
+  artikel zette, en de prijzen die het artikel eerder had (met de datum).
 - Favorieten die je met een ster bewaart, en lijsten die je zelf opslaat.
 - Je instellingen, waaronder de taal.
 - De gebruikersnaam van je Cardmarket-account, zodat de extensie niets door
@@ -25,8 +26,8 @@ Cardmarket. Er is geen server van ons: niets van jou komt bij ons terecht.
 je browser-account* aan (standaard aan, uit te zetten in de instellingen),
 dan gaan je favorieten, lijsten, opgeslagen artikelen en instellingen ook via
 de sync van je eigen browser naar je andere browsers. In Chrome is dat je
-Google-account. Je API-sleutel, plaatjes en prijzen gaan niet mee: die blijven
-in elke browser apart. Die sync is van jou en van je browser. Wij hebben er
+Google-account. Je API-sleutel, plaatjes, prijsgeschiedenis en prijzen uit de
+prijsgids gaan niet mee: die blijven in elke browser apart. Die sync is van jou en van je browser. Wij hebben er
 geen toegang toe.
 
 **Wat Cart Saver op cardmarket.com doet.** Alles via je eigen ingelogde
@@ -87,7 +88,8 @@ server of ours: nothing of yours ever reaches us.
 
 **What Cart Saver keeps.**
 - The articles in your shopping cart: card or product, seller, condition,
-  language, price, quantity, links and pictures.
+  language, price, quantity, links and pictures, the description the seller
+  wrote for the article, and the prices it had before (with the date).
 - Favourites you star, and lists you save yourself.
 - Your settings, including the language.
 - The username of your Cardmarket account, so nothing gets mixed up when
@@ -99,8 +101,8 @@ server of ours: nothing of yours ever reaches us.
 browser account* on (on by default, can be switched off in the settings),
 your favourites, lists, saved articles and settings also travel through your
 own browser's sync to your other browsers. In Chrome that is your Google
-account. Your API key, pictures and prices do not travel: they stay separate
-in every browser. That sync belongs to you and your browser. We have no access
+account. Your API key, pictures, price history and price-guide prices do not
+travel: they stay separate in every browser. That sync belongs to you and your browser. We have no access
 to it.
 
 **What Cart Saver does on cardmarket.com.** All through your own logged-in

@@ -207,6 +207,13 @@
   // Taking what came from elsewhere
   // ---------------------------------------------------------------------------
 
+  /** A record from another browser over what this one knows, with its price noted in the history. */
+  function withPriceFrom(local, incoming) {
+    if (!local) return store.notePrice({ ...incoming }, incoming.price, Date.now()) || incoming;
+    const priced = store.notePrice(local, incoming.price, Date.now());
+    return { ...local, ...incoming, priceHistory: priced.priceHistory || local.priceHistory, priceChange: priced.priceChange || null };
+  }
+
   async function applyLocally(changes) {
     const { items: itemChanges, favorites: favChanges, carts: cartChanges, settings: settingsValue } = changes;
     if (Object.keys(itemChanges).length) {
@@ -214,8 +221,9 @@
         const next = { ...items };
         for (const [id, packed] of Object.entries(itemChanges)) {
           if (packed === null) delete next[id];
-          // What only this browser knows (pictures, trend, last attempt…) stays.
-          else next[id] = { ...(next[id] || {}), ...unpack(packed, ITEM_FIELDS) };
+          // What only this browser knows (pictures, trend, last attempt…) stays;
+          // a price seen elsewhere goes into this browser's price history too.
+          else next[id] = withPriceFrom(next[id], unpack(packed, ITEM_FIELDS));
         }
         return next;
       });
@@ -225,7 +233,7 @@
         const next = { ...favorites };
         for (const [id, packed] of Object.entries(favChanges)) {
           if (packed === null) delete next[id];
-          else next[id] = { ...(next[id] || {}), ...unpack(packed, FAVORITE_FIELDS), lastSeenAt: (next[id] && next[id].lastSeenAt) || Date.now() };
+          else next[id] = { ...withPriceFrom(next[id], unpack(packed, FAVORITE_FIELDS)), lastSeenAt: (next[id] && next[id].lastSeenAt) || Date.now() };
         }
         return next;
       });

@@ -168,6 +168,37 @@
 
   const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
+  /**
+   * The first amount of money in a text, whatever the notation: "0.99" (the
+   * cart's data-price), "0,99 €", "1.234,56 €", "€1,234.56", "1 234,56 €".
+   * The separator followed by one or two digits at the end is the decimal one.
+   * Null when there is none.
+   */
+  function parseMoney(text) {
+    const tokens = [...String(text == null ? '' : text).matchAll(/\d[\d.,\s\u00a0\u202f']*/g)].map((m) => m[0].replace(/[\s\u00a0\u202f']+/g, ' ').trim().replace(/[ .,]+$/, ''));
+    if (!tokens.length) return null;
+    // "2x 0,99 €": the amount with cents, not the count before it.
+    const s = tokens.find((tok) => /[.,]\d{1,2}$/.test(tok)) || tokens[0];
+    const decimal = s.match(/[.,](\d{1,2})$/);
+    let value;
+    if (decimal) {
+      const whole = s.slice(0, -decimal[0].length).replace(/[^\d]/g, '');
+      value = parseFloat(`${whole || '0'}.${decimal[1]}`);
+    } else {
+      value = parseFloat(s.replace(/[^\d]/g, ''));
+    }
+    return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
+  }
+
+  /** The seller's own words about this one article ("Small crease, top left"). */
+  function commentOf(row) {
+    const fromData = clean(row.getAttribute && row.getAttribute('data-comment'));
+    if (fromData) return fromData;
+    const el = row.querySelector('.product-comments .text-truncate, .product-comments, .article-comment, td.comments, .col-comments');
+    if (!el) return null;
+    return clean(el.getAttribute('data-bs-original-title') || el.getAttribute('title') || el.textContent) || null;
+  }
+
   function labelOf(el) {
     for (const attr of LABEL_ATTRS) {
       const value = el.getAttribute(attr);
@@ -358,11 +389,9 @@
 
     const imageUrl = findImageUrl(tr.querySelector('.thumbnail-icon')) || findImageUrl(tr);
 
-    let price = parseFloat(tr.getAttribute('data-price'));
-    if (!Number.isFinite(price)) {
-      const priceText = clean(tr.querySelector('td.price') && tr.querySelector('td.price').textContent);
-      price = parseFloat(priceText.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
-    }
+    // The article's own price (per copy): data-price, else the first amount in the price cell.
+    let price = parseMoney(tr.getAttribute('data-price'));
+    if (price == null) price = parseMoney(tr.querySelector('td.price') && tr.querySelector('td.price').textContent);
 
     return {
       articleId,
@@ -375,7 +404,7 @@
       productUrl,
       imageUrl,
       amount: parseInt(tr.getAttribute('data-amount'), 10) || 1,
-      price: Number.isFinite(price) ? price : null,
+      price: price != null && price > 0 ? price : null,
       condition: conditionId,
       conditionLabel:
         clean(conditionEl && conditionEl.querySelector('.badge') && conditionEl.querySelector('.badge').textContent) ||
@@ -385,7 +414,7 @@
       languageLabel,
       foil: extras.some((l) => /foil/i.test(l)),
       extras,
-      comment: clean(tr.getAttribute('data-comment')) || null,
+      comment: commentOf(tr),
       ...sellerFromLink(sellerLink, baseUrl),
       sellerId: sellerIdOf(tr),
     };
@@ -556,16 +585,14 @@
 
     let price = null;
     const priceBox = row.querySelector('.col-offer .price-container') || row.querySelector('.price-container');
+    // The price to pay: not a struck-through old price.
     for (const span of priceBox ? priceBox.querySelectorAll('span.color-primary, span.text-nowrap') : []) {
       if (span.closest('del, s, .text-decoration-line-through')) continue;
-      const m = clean(span.textContent).match(/(\d[\d.\s]*,\d{2})/);
-      if (m) {
-        price = parseFloat(m[1].replace(/[.\s]/g, '').replace(',', '.'));
-        break;
-      }
+      if (!/\d[\d.\s]*[.,]\d{2}/.test(span.textContent)) continue;
+      price = parseMoney(span.textContent);
+      if (price != null) break;
     }
     const countEl = row.querySelector('.col-offer .item-count') || row.querySelector('.item-count');
-    const comment = row.querySelector('.product-comments .text-truncate, .product-comments');
 
     return {
       articleId,
@@ -586,7 +613,7 @@
       languageLabel,
       foil: extras.some((l) => /foil/i.test(l)),
       extras,
-      comment: clean(comment && comment.textContent) || null,
+      comment: commentOf(row),
       ...(pageSeller || sellerFromLink(sellerLink, baseUrl)),
     };
   }
@@ -1127,6 +1154,7 @@
     findImageUrl,
     parseCartRow,
     parseOfferRow,
+    parseMoney,
     readHeaderCount,
     readUsername,
     readCartExpiry,

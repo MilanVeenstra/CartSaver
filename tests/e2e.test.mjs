@@ -2239,6 +2239,109 @@ describe('Cardmarket Cart Saver', () => {
     });
   });
 
+  describe('what the seller wrote, and what it cost', () => {
+    const COMMENT = 'Slight whitening on the back';
+    const prices = {};
+    const openPopup = async () => {
+      const popup = await context.newPage();
+      await popup.setViewportSize({ width: 400, height: 600 });
+      await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+      await popup.locator('#tab-cart').click();
+      return popup;
+    };
+    const setPrice = (id, price) => {
+      mock.article(id).price = price;
+    };
+
+    before(async () => {
+      for (const id of [BOG, MAGE, SOL_KINGDOM]) prices[id] = mock.article(id).price;
+      mock.article(MAGE).comment = COMMENT;
+      for (const id of [BOG, MAGE, SOL_KINGDOM]) mock.state.available.set(id, mock.article(id));
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.job': null, 'cmcs.items': {}, 'cmcs.favorites': {} }));
+      mock.state.cart = new Map([[BOG, 1], [MAGE, 1]]);
+    });
+    after(async () => {
+      for (const [id, price] of Object.entries(prices)) setPrice(id, price);
+      delete mock.article(MAGE).comment;
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.favorites': {} }));
+    });
+
+    it("keeps the seller's description of the article and shows it", async () => {
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      await waitFor(async () => (await items())[MAGE]?.comment === COMMENT, 'description saved');
+      // Everything is in the cart: the panel only sums up, the popup lists the articles.
+      const popup = await openPopup();
+      const popupRow = popup.locator(`#list .cmcs-item[data-article-id="${MAGE}"]`);
+      await waitFor(() => popupRow.isVisible(), 'popup row');
+      assert.equal(await popupRow.locator('.cmcs-item-comment').innerText(), `“${COMMENT}”`);
+      assert.match(await popupRow.locator('.cmcs-item-comment').getAttribute('title'), /Beschrijving van de verkoper: Slight whitening/);
+      await popup.close();
+    });
+
+    it('notices a higher price in the cart, and keeps the price history', async () => {
+      const before = (await items())[MAGE].price;
+      setPrice(MAGE, Math.round((before + 0.3) * 100) / 100);
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      const saved = await waitFor(async () => {
+        const item = (await items())[MAGE];
+        return item && Math.abs(item.price - before - 0.3) < 0.001 && item;
+      }, 'new price saved');
+      assert.equal(saved.priceHistory.length, 2);
+      assert.equal(saved.priceHistory[0].price, before, 'the first price stays');
+      assert.deepEqual([saved.priceChange.from, saved.priceChange.to], [before, saved.price]);
+
+      await waitFor(async () => /1 artikel is duurder geworden \(\+0,30 €\)/.test(await widget(page).innerText()), 'said at the top of the panel');
+
+      const popup = await openPopup();
+      await waitFor(async () => /1 artikel is duurder geworden \(\+0,30 €\)/.test(await popup.locator('#summary').innerText()), 'and in the popup');
+      const row = popup.locator(`#list .cmcs-item[data-article-id="${MAGE}"]`);
+      assert.match(await row.innerText(), /0,30 € hoger/);
+      await row.locator('.cmcs-item-line').click();
+      const history = row.locator('.cmcs-history');
+      await waitFor(() => history.isVisible(), 'price history in the opened row');
+      const text = await history.innerText();
+      assert.match(text, /Prijsverloop/);
+      const euro = (v) => `${v.toFixed(2).replace('.', ',')} €`;
+      assert.ok(text.includes(euro(saved.price)) && text.includes('+0,30 €') && text.includes(euro(before)) && /eerste prijs/.test(text), text);
+      assert.ok(text.indexOf(euro(saved.price)) < text.indexOf(euro(before)), 'newest first');
+      assert.equal(await history.locator('svg.cmcs-spark circle.cmcs-spark-up').count(), 1, 'the chart ends in red');
+      assert.equal(await row.locator('.cmcs-item-details .cmcs-item-comment').innerText(), `“${COMMENT}”`, 'the whole description when opened');
+      await shot(popup, '32-price-history');
+      await popup.close();
+    });
+
+    it('picks up a new price of a saved article on an offer page', async () => {
+      // Out of the cart: only an offer page can tell its price now.
+      mock.state.cart = new Map([[MAGE, 1]]);
+      await page.goto(`${CM}/en/Magic`);
+      await waitFor(async () => (await items())[BOG]?.status === 'missing', 'Bojuka Bog missing');
+      setPrice(BOG, 1.49);
+      await page.goto(`${CM}/en/Magic/Products/Singles/Commander-2018/Bojuka-Bog`);
+      const bog = await waitFor(async () => {
+        const item = (await items())[BOG];
+        return item && item.price === 1.49 && item;
+      }, 'price from the offer page');
+      assert.deepEqual(bog.priceHistory.map((p) => p.price), [0.99, 1.49]);
+      assert.deepEqual([bog.priceChange.from, bog.priceChange.to], [0.99, 1.49]);
+      assert.equal(bog.status, 'missing', 'still missing: only the price changed');
+    });
+
+    it('a favourite keeps its price history too', async () => {
+      await page.goto(SOL_RING_URL);
+      const star = page.locator(`#articleRow${SOL_KINGDOM} cmcs-fav button`);
+      await star.click();
+      const was = (await waitFor(async () => (await favorites())[SOL_KINGDOM], 'favourite saved')).price;
+      setPrice(SOL_KINGDOM, 1.35);
+      await page.reload();
+      const fav = await waitFor(async () => {
+        const f = (await favorites())[SOL_KINGDOM];
+        return f && f.price === 1.35 && f;
+      }, 'new price of the favourite');
+      assert.deepEqual(fav.priceHistory.map((p) => p.price), [was, 1.35]);
+      assert.equal(fav.priceChange.to, 1.35);
+    });
+  });
+
   describe('Dutch or English, your choice', () => {
     let cart;
     const setLanguage = (language) =>

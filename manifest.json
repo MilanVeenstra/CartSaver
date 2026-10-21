@@ -4,7 +4,7 @@
   "short_name": "Cart Saver",
   "description": "__MSG_extDescription__",
   "homepage_url": "https://github.com/MilanVeenstra/CartSaver",
-  "version": "1.6.6",
+  "version": "1.6.7",
   "default_locale": "en",
   "icons": {
     "16": "icons/icon16.png",

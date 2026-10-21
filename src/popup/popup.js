@@ -687,6 +687,7 @@
       ...[
         h('h2', { class: 'cmcs-summary-title' }, title),
         sub ? h('p', { class: 'cmcs-summary-sub' }, sub) : null,
+        ui.pricesUpLine([...candidates, ...inCart]),
         expiryLine(),
         h(
           'button',

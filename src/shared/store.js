@@ -155,6 +155,47 @@
   // Pure helpers (no storage access) — easy to reason about and to test.
   // ---------------------------------------------------------------------------
 
+  /** Price changes kept per article (the first known price always stays). */
+  const PRICE_HISTORY_MAX = 30;
+  /** Smaller differences are rounding, not a new price. */
+  const PRICE_EPSILON = 0.005;
+
+  const samePrice = (a, b) => a != null && b != null && Math.abs(a - b) < PRICE_EPSILON;
+
+  /**
+   * The prices an article had, oldest first: [{ at, price }]. Articles saved
+   * before there was a history start with the price they have now.
+   */
+  function priceHistoryOf(article) {
+    if (!article) return [];
+    const list = Array.isArray(article.priceHistory) ? article.priceHistory.filter((p) => p && Number.isFinite(p.price)) : [];
+    if (list.length || article.price == null) return list;
+    return [{ at: article.firstSavedAt || article.favoritedAt || article.lastSeenInCartAt || null, price: article.price }];
+  }
+
+  /**
+   * The article with a price just seen on Cardmarket (`at` = when): a new
+   * price goes into its history and is flagged as a change (up or down).
+   * The same price changes nothing. Returns the same object when nothing
+   * changed, so callers can tell.
+   */
+  function notePrice(article, price, at = Date.now()) {
+    if (!article || price == null || !Number.isFinite(price) || price <= 0) return article;
+    const history = priceHistoryOf(article);
+    const known = article.price;
+    if (samePrice(known, price) && history.length) return article;
+    const next = history.concat(samePrice(history.length ? history[history.length - 1].price : null, price) ? [] : [{ at, price }]);
+    // Keep the first price (what it was when saved) and the latest ones.
+    const trimmed = next.length > PRICE_HISTORY_MAX ? [next[0], ...next.slice(next.length - PRICE_HISTORY_MAX + 1)] : next;
+    const changed = known != null && !samePrice(known, price);
+    return {
+      ...article,
+      price,
+      priceHistory: trimmed,
+      priceChange: changed ? { from: known, to: price, at } : article.priceChange || null,
+    };
+  }
+
   /**
    * Merge a freshly read cart into the saved items.
    *
@@ -181,16 +222,16 @@
       // the user lowered it on purpose (then the new amount is what they want).
       const previousWanted = prev ? prev.wantedAmount || prev.amount || cartItem.amount : cartItem.amount;
       const wantedAmount = accept[id] ? cartItem.amount : Math.max(previousWanted, cartItem.amount);
-      let priceChange = (prev && prev.priceChange) || null;
-      if (prev && prev.price != null && cartItem.price != null && Math.abs(prev.price - cartItem.price) >= 0.005) {
-        priceChange = { from: prev.price, to: cartItem.price, at: opts.now };
-        priceChanged.push(id);
-      }
+      // The price: a new one goes into the history and is flagged (prev.price is what we knew).
+      const priced = notePrice({ ...(prev || {}), firstSavedAt: (prev && prev.firstSavedAt) || opts.now }, cartItem.price, opts.now);
+      if (prev && priced.priceChange !== (prev.priceChange || null) && priced.priceChange) priceChanged.push(id);
       next[id] = {
         ...(prev || {}),
         ...cartItem,
+        price: cartItem.price != null ? cartItem.price : prev ? prev.price : null,
+        priceHistory: priced.priceHistory || (prev && prev.priceHistory) || undefined,
         wantedAmount,
-        priceChange,
+        priceChange: priced.priceChange || null,
         viaFavorite: false,
         firstSavedAt: (prev && prev.firstSavedAt) || opts.now,
         lastSeenInCartAt: opts.now,
@@ -287,7 +328,8 @@
   function toFavorite(article, now = Date.now()) {
     const fav = {};
     for (const field of FAVORITE_FIELDS) if (article[field] !== undefined) fav[field] = article[field];
-    return { ...fav, favoritedAt: now, lastSeenAt: now, unavailable: false, unavailableMessage: null };
+    const history = Array.isArray(article.priceHistory) && article.priceHistory.length ? article.priceHistory : fav.price != null ? [{ at: now, price: fav.price }] : [];
+    return { ...fav, priceHistory: history, favoritedAt: now, lastSeenAt: now, unavailable: false, unavailableMessage: null };
   }
 
   /** The PSA band for an article's condition, or null (sealed products, unknown condition). */
@@ -503,6 +545,9 @@
     JOB_PENDING_TTL_MS,
 
     applyCartSnapshot,
+    notePrice,
+    priceHistoryOf,
+    PRICE_HISTORY_MAX,
     summarize,
     refillAmount,
     copiesToReturn,
@@ -751,7 +796,7 @@
     /** The articles as a saved list keeps them: what they are, not how they are doing now. */
     savedCopies(articles) {
       return articles.map((item) => {
-        const { status, missingSince, missingReason, lastAttempt, priceChange, viaFavorite, thumb, thumbTriedAt, ...rest } = item;
+        const { status, missingSince, missingReason, lastAttempt, priceChange, priceHistory, viaFavorite, thumb, thumbTriedAt, ...rest } = item;
         return { ...rest, wantedAmount: item.wantedAmount || item.amount || 1 };
       });
     },
