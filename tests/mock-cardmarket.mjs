@@ -259,6 +259,12 @@ export function createMockCardmarket() {
     addEndpoint: 'ShoppingCart_Add_AddArticlesFromUserOffers',
     /** answer adds with a Cloudflare challenge */
     challenge: false,
+    /** this many next page loads get Cloudflare's "Just a moment" page first */
+    challengePages: 0,
+    /** a seller's stock pages say there is a next page */
+    sellerPaged: false,
+    /** product pages end with "Show more results" (more offers than shown) */
+    productMore: false,
     /** render cart rows in a shape the extension cannot read (layout change) */
     brokenRows: false,
     /** an outdated token printed on pages other than the cart page */
@@ -555,6 +561,7 @@ export function createMockCardmarket() {
         <!-- A button that behaves like the site's own: AJAX add, then the header badge is updated in place. -->
         <button id="site-add">Put Sol Ring (Kärtchen-Laden) in cart</button>
         <div class="table article-table table-striped"><div class="table-body">${offers.map((a) => offerRow(a, lang)).join('')}</div></div>
+        ${state.productMore ? '<div id="loadMore" class="p-0"><form method="POST" data-ajax-action="Product_LoadMoreArticles" class="d-grid"><button type="submit" id="loadMoreButton" class="btn btn-primary btn-sm">Show more results</button></form></div>' : ''}
         <script>
           document.getElementById('site-add').addEventListener('click', async () => {
             const token = document.querySelector('input[name="__cmtkn"]').value;
@@ -584,7 +591,9 @@ export function createMockCardmarket() {
       title: seller,
       body: `<h1>${esc(seller)}</h1><div id="UserOffersTable" class="table article-table table-striped"><div class="table-body">${offers
         .map((a) => offerRow(a, lang, { sellerPage: true }))
-        .join('')}</div></div>`,
+        .join('')}</div></div>${
+        state.sellerPaged ? '<nav><ul class="pagination"><li class="page-item"><a class="page-link" href="?site=2">2</a></li></ul></nav>' : ''
+      }`,
     });
   }
 
@@ -644,6 +653,15 @@ export function createMockCardmarket() {
     state.requests.push({ method, path: url.pathname, body, at: Date.now() });
 
     if (url.pathname.startsWith('/cdn-cgi/')) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
+    if (state.challengePages > 0 && method === 'GET' && request.resourceType() === 'document') {
+      state.challengePages -= 1;
+      return r.fulfill({
+        status: 403,
+        headers: { 'cf-mitigated': 'challenge' },
+        contentType: 'text/html; charset=utf-8',
+        body: '<!DOCTYPE html><html><head><title>Just a moment...</title></head><body><div id="challenge-error-text">Enable JavaScript and cookies to continue</div><script>window._cf_chl_opt={}</script></body></html>',
+      });
+    }
 
     const [lang = 'en', game = 'Magic', page = '', ...rest] = url.pathname.split('/').filter(Boolean);
     let res;

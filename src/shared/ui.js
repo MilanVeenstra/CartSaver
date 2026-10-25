@@ -567,8 +567,13 @@
     return img;
   }
 
-  function iconButton(label, iconName, onClick, extraClass = '') {
-    return h('button', { type: 'button', class: `cmcs-icon-btn ${extraClass}`, title: label, 'aria-label': label, onclick: onClick }, icon(iconName));
+  function iconButton(label, iconName, onClick, extraClass = '', { disabled = false } = {}) {
+    return h('button', { type: 'button', class: `cmcs-icon-btn ${extraClass}`, title: label, 'aria-label': label, disabled, onclick: onClick }, icon(iconName));
+  }
+
+  /** A check "still for sale?" that is going on (or waiting for a Cardmarket tab). */
+  function checkActive(check, now = Date.now()) {
+    return Boolean(check && (check.state === 'running' || check.state === 'pending') && now - (check.heartbeatAt || check.at || 0) <= 2 * 60 * 1000);
   }
 
   function iconLink(label, iconName, href) {
@@ -719,6 +724,7 @@
       color: var(--cmcs-text); text-decoration: underline; text-underline-offset: 2px;
     }
     .cmcs-link:hover { color: var(--cmcs-red); }
+    .cmcs-link:disabled { opacity: 0.4; cursor: default; color: var(--cmcs-text); }
 
     /* Article rows */
     .cmcs-item { border-top: 1px solid var(--cmcs-line); }
@@ -851,6 +857,7 @@
     resultText,
     sectionHead,
     sectionLink,
+    checkActive,
     footBar,
     dollars,
     shortDate,

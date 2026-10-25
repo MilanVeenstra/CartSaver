@@ -17,6 +17,14 @@
  *   on is remembered (as a hash, in cmcs.sync). Changed here only → sent;
  *   changed elsewhere only → taken; gone on one side while unchanged on the
  *   other → removed on this side too. Changed on both → the newest wins.
+ * - That memory only counts for the synced copy it was made with: the copy
+ *   carries an id ("_e"), and every browser leaves a mark of its own last
+ *   write in it ("_w.<install>"). When the id is another one, or this
+ *   browser's last write is not in it (a first meeting, a copy Chrome's own
+ *   sync replaced after a while without sync, one emptied by removing the
+ *   extension somewhere), both sides are joined and nothing is removed. Only
+ *   "Delete everything" removes elsewhere: it leaves a new id that names the
+ *   old one.
  * - Chrome sync allows ~100 KB, 8 KB per item, 512 items and 120 writes a
  *   minute: one set() and one remove() per round, rounds are batched, and
  *   when it is full the settings, favourites and lists go first; what does
@@ -28,11 +36,20 @@
   const { store } = root.CMCS;
 
   const STATE_KEY = 'cmcs.sync';
+  /** The id of the synced copy: { id, at } (and { cleared, prev: [old ids] } after "Delete everything"). */
+  const EPOCH_KEY = '_e';
+  /** "_w.<install>": { n, at }, a new n with every write of that browser. */
+  const MARK_PREFIX = '_w.';
+  /** Marks of browsers that did not write for this long are cleared away… */
+  const MARK_KEEP_MS = 180 * 24 * 60 * 60 * 1000;
+  /** …so every browser that still runs renews its own at least this often. */
+  const MARK_RENEW_MS = 30 * 24 * 60 * 60 * 1000;
   /** Stay under Chrome's 102,400 bytes and 512 items, with room to spare. */
   const BUDGET_BYTES = 92 * 1024;
   const MAX_RECORDS = 480;
-  /** A record larger than this is split (Chrome allows 8,192 bytes per item, key included). */
-  const PART_CHARS = 6000;
+  /** Chrome allows 8,192 bytes per item, key included: a record larger than SINGLE_BYTES is split in parts of PART_BYTES. */
+  const SINGLE_BYTES = 7800;
+  const PART_BYTES = 7000;
 
   const CM = 'https://www.cardmarket.com';
   const IMG = 'https://product-images.s3.cardmarket.com';
@@ -150,7 +167,7 @@
   function remoteRecords(all) {
     const records = new Map();
     for (const [key, entry] of Object.entries(all || {})) {
-      if (key.includes('~') || !entry || typeof entry !== 'object') continue;
+      if (key.includes('~') || key.startsWith('_') || !entry || typeof entry !== 'object') continue;
       if (typeof entry.n === 'number' && typeof entry.s === 'string') {
         // A split record: its parts must all be there, or it waits for the next round.
         let json = entry.s;
@@ -180,18 +197,56 @@
     return records;
   }
 
+  /**
+   * What one character costs in Chrome's count: UTF-8, with "<", U+2028/9 and
+   * DEL written as \uXXXX (Chrome's JSON does that), and inside a string (a
+   * part of a split record) also '"' and '\' escaped.
+   */
+  function charBytes(ch, inString) {
+    const c = ch.codePointAt(0);
+    if (c === 0x3c || c === 0x2028 || c === 0x2029 || c === 0x7f) return 6;
+    if (inString && (c === 0x22 || c === 0x5c)) return 2;
+    if (inString && c < 0x20) return 6;
+    return c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+  }
+
+  /** The bytes Chrome counts for a text (JSON) as it stores it. */
+  function bytesOf(text) {
+    let n = 0;
+    for (const ch of String(text)) n += charBytes(ch, false);
+    return n;
+  }
+
+  /** A record's JSON in parts that each stay under PART_BYTES once stored as a string (never inside a character). */
+  function splitJson(json) {
+    const parts = [];
+    let current = '';
+    let size = 2;
+    for (const ch of json) {
+      const cost = charBytes(ch, true);
+      if (current && size + cost > PART_BYTES) {
+        parts.push(current);
+        current = '';
+        size = 2;
+      }
+      current += ch;
+      size += cost;
+    }
+    parts.push(current);
+    return parts;
+  }
+
   /** What one record takes in sync storage: key → value, split when it is too large. */
   function entriesFor(key, record, now) {
     const single = { [key]: { u: now, v: record.value } };
-    if (JSON.stringify(single[key]).length + key.length < 7800) return single;
-    const parts = [];
-    for (let i = 0; i < record.json.length; i += PART_CHARS) parts.push(record.json.slice(i, i + PART_CHARS));
+    if (bytesOf(key) + bytesOf(JSON.stringify(single[key])) < SINGLE_BYTES) return single;
+    const parts = splitJson(record.json);
     const entries = { [key]: { u: now, n: parts.length, s: parts[0] } };
     parts.slice(1).forEach((part, i) => (entries[`${key}~${i + 1}`] = part));
     return entries;
   }
 
-  const sizeOf = (entries) => Object.entries(entries).reduce((sum, [key, value]) => sum + key.length + JSON.stringify(value).length, 0);
+  const sizeOf = (entries) => Object.entries(entries).reduce((sum, [key, value]) => sum + bytesOf(key) + bytesOf(JSON.stringify(value)), 0);
 
   /** A short fingerprint of a record (FNV-1a), to remember what both sides agreed on. */
   function hash(text) {
@@ -292,8 +347,24 @@
     ]);
     const local = localRecords({ items, favorites, carts, settings });
     const remote = remoteRecords(all);
-    const base = { ...state.base };
     const now = Date.now();
+    // What was agreed only counts for the copy it was agreed with: the same
+    // id, with this browser's last write still in it. Or the copy "Delete
+    // everything" made of it, when this browser sent nothing new since that
+    // wipe (what it saved after, say with Chrome sync off, is not wiped).
+    // Any other copy: join, remove nothing.
+    const epoch = all && all[EPOCH_KEY] && typeof all[EPOCH_KEY].id === 'string' ? all[EPOCH_KEY] : null;
+    const ownMark = state.id && all ? all[`${MARK_PREFIX}${state.id}`] : null;
+    const sameCopy = Boolean(epoch && state.epoch && state.w && ownMark) && epoch.id === state.epoch && ownMark.n === state.w;
+    const wipedOurs =
+      Boolean(epoch && state.epoch) && epoch.id !== state.epoch && Array.isArray(epoch.prev) && epoch.prev.includes(state.epoch) && !(state.dataAt > (epoch.at || 0));
+    const trusted = sameCopy || wipedOurs;
+    const base = trusted ? { ...state.base } : {};
+    // After a join this browser goes on under a new name: a copy of this
+    // profile elsewhere (a restored backup, a moved profile) then has its own.
+    const installId = trusted && state.id ? state.id : newId();
+    const markKey = `${MARK_PREFIX}${installId}`;
+    const epochId = epoch ? epoch.id : newId();
 
     const toLocal = { items: {}, favorites: {}, carts: {}, settings: null };
     const take = (key, value) => {
@@ -343,9 +414,13 @@
 
     // What fits: what is already synced keeps its place; new records by importance.
     const kept = Object.entries(all || {}).filter(([key]) => !removals.some((r) => key === r || key.startsWith(`${r}~`)));
-    let bytes = kept.reduce((sum, [key, value]) => sum + key.length + JSON.stringify(value).length, 0);
-    let count = kept.filter(([key]) => !key.includes('~')).length;
+    let bytes = kept.reduce((sum, [key, value]) => sum + bytesOf(key) + bytesOf(JSON.stringify(value)), 0);
+    let count = kept.filter(([key]) => !key.includes('~') && !key.startsWith('_')).length;
     const toSet = {};
+    if (!epoch) {
+      toSet[EPOCH_KEY] = { id: epochId, at: now };
+      bytes += sizeOf({ [EPOCH_KEY]: toSet[EPOCH_KEY] });
+    }
     let skipped = 0;
     pushes.sort((a, b) => a.record.priority - b.record.priority || b.record.recent - a.record.recent);
     for (const { key, record, existing } of pushes) {
@@ -365,6 +440,21 @@
     }
     const removeKeys = [...new Set(removals.flatMap((key) => [key, ...Object.keys(all).filter((k) => k.startsWith(`${key}~`))]))];
 
+    // Every write leaves this browser's mark; after a join it is written in
+    // any case, so the next round knows the copy again; and once a month, so
+    // a browser that only takes changes is not cleared away as gone.
+    const sentData = Object.keys(toSet).some((key) => !key.startsWith('_')) || removeKeys.some((key) => !key.startsWith('_'));
+    const renew = !sameCopy || !(ownMark && ownMark.at > now - MARK_RENEW_MS);
+    let writeMark = state.w || null;
+    if (Object.keys(toSet).length || removeKeys.length || renew) {
+      writeMark = newId();
+      toSet[markKey] = { n: writeMark, at: now };
+      bytes += sizeOf({ [markKey]: toSet[markKey] });
+      for (const [key, value] of Object.entries(all || {})) {
+        if (key.startsWith(MARK_PREFIX) && key !== markKey && !(value && value.at > now - MARK_KEEP_MS)) removeKeys.push(key);
+      }
+    }
+
     let error = null;
     try {
       await applyLocally(toLocal);
@@ -376,10 +466,10 @@
     const status = {
       at: now,
       error,
-      sent: Object.keys(toSet).filter((key) => !key.includes('~')).length,
+      sent: Object.keys(toSet).filter((key) => !key.includes('~') && !key.startsWith('_')).length,
       received:
         Object.keys(toLocal.items).length + Object.keys(toLocal.favorites).length + Object.keys(toLocal.carts).length + (toLocal.settings ? 1 : 0),
-      removed: removeKeys.filter((key) => !key.includes('~')).length,
+      removed: removeKeys.filter((key) => !key.includes('~') && !key.startsWith('_')).length,
       skipped,
       bytes: Math.max(0, bytes),
       records: count,
@@ -387,8 +477,17 @@
     // When another browser last brought something (the settings page shows it: "never" points at a setup problem).
     status.lastReceivedAt = !error && status.received ? now : (state.status && state.status.lastReceivedAt) || null;
     // A failed write is tried again next round: only what went through counts as agreed.
-    await chrome.storage.local.set({ [STATE_KEY]: { base: error ? state.base : base, at: error ? state.at : now, status } });
+    await chrome.storage.local.set({
+      [STATE_KEY]: error
+        ? { ...state, status }
+        : { id: installId, base, at: now, epoch: epochId, w: writeMark, dataAt: sentData ? now : state.dataAt || 0, status },
+    });
     return status;
+  }
+
+  function newId() {
+    if (root.crypto && root.crypto.randomUUID) return root.crypto.randomUUID();
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   }
 
   let running = null;
@@ -418,5 +517,5 @@
     timer = setTimeout(merge, delayMs);
   }
 
-  root.CMCS.sync = { merge, mergeSoon, pack, unpack, localRecords, remoteRecords, ITEM_FIELDS, FAVORITE_FIELDS, STATE_KEY };
+  root.CMCS.sync = { merge, mergeSoon, pack, unpack, localRecords, remoteRecords, entriesFor, bytesOf, ITEM_FIELDS, FAVORITE_FIELDS, STATE_KEY, EPOCH_KEY };
 })(globalThis);

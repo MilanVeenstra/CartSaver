@@ -24,10 +24,12 @@ Alles in het [Developer Dashboard](https://chrome.google.com/webstore/devconsole
 
 4. **Nieuw item** → upload `cart-saver-1.6.6.zip`. Die heb je van mij
    gekregen, of je maakt hem zelf met `npm run package` (komt in `dist/`).
-5. **Optioneel, voor ontwikkelen:** tabblad **Pakket** → *Openbare sleutel
-   weergeven*. Stuur mij de sleutel. Die is openbaar, dus je mag hem gewoon
-   delen. Dan krijgt je uitgepakte ontwikkelversie hetzelfde ID als de
-   Store-versie. Voor publiceren is dit niet nodig.
+5. **Nodig voor sync tussen je ZIP-installaties:** tabblad **Pakket** →
+   *Openbare sleutel weergeven*. Stuur mij de sleutel (alleen de tekst
+   tussen de BEGIN- en END-regels). Die is openbaar, dus je mag hem gewoon
+   delen; de privésleutel komt nooit in beeld. Dan krijgt elke ZIP-installatie
+   hetzelfde ID als de Store-versie. Voor publiceren is dit niet nodig. Zie
+   *Sync tussen je eigen computers* hieronder.
 
 ### c. Store-vermelding
 
@@ -64,6 +66,30 @@ installatie met een eigen ID en eigen opslag. Exporteer vóór je overstapt je
 gegevens (Instellingen → Gegevens → Exporteren), verwijder de ZIP-versie,
 installeer de Store-versie en importeer het bestand. Met synchroniseren aan
 nemen je andere browsers het daarna over.
+
+**Sync tussen je eigen computers (ZIP).** Chrome bewaart de sync per
+extensie-ID. Een uitgepakte installatie zonder vaste `key` krijgt een ID uit
+het pad van de map, dus elke computer heeft een ander ID en de sync komt
+nooit bij elkaar. Je ziet het in Instellingen → *Je andere browsers*: de
+ID's verschillen en er staat *nog nooit iets ontvangen*. Zo los je het op:
+
+1. Stuur de openbare sleutel uit stap 5. Ik zet hem als `key` in
+   `manifest.json` (`package.sh` haalt hem weer weg voor de Store).
+2. **Vóór die versie binnenkomt, op elke computer:** Instellingen →
+   Gegevens → *Exporteren*, en schrijf je instellingen op. Met een nieuw ID
+   begint de extensie leeg (de oude gegevens blijven onder het oude ID).
+3. Laat de nieuwe versie binnenkomen (automatisch of met ↻). Controleer dat
+   beide computers nu hetzelfde ID tonen.
+4. Computer A: *Importeren*, instellingen terugzetten, *Nu synchroniseren*.
+5. Computer B: eerst *Nu synchroniseren* (neemt A over), dan *Importeren*
+   (voegt alleen toe wat ontbreekt), dan nog eens *Nu synchroniseren*.
+6. In Chrome op beide computers: ingelogd in Chrome zelf met hetzelfde
+   Google-account, en bij *Synchronisatie beheren* staat **Extensies** aan.
+   `chrome://sync-internals` laat zien of *Extension Settings* loopt.
+7. Verwijder de extensie liever niet op één computer terwijl de andere synct
+   (gebruik *Opnieuw laden*): Chrome wist dan de kopie in je account. Sinds
+   1.6.9 gooit Cart Saver daardoor niets meer weg, maar exports zijn nooit
+   verkeerd.
 
 ## 2. Pakket
 

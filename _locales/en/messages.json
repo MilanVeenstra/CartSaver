@@ -206,6 +206,9 @@
   "errorBusy": {
     "message": "Already putting articles back — wait until that has finished."
   },
+  "errorChecking": {
+    "message": "Already checking — wait until that has finished."
+  },
   "errorCartUnreadable": {
     "message": "Your cart page could not be read, so nothing was added (Cardmarket may have changed its layout). This extension probably needs an update."
   },

@@ -40,6 +40,7 @@
   let carts = [];
   let job = null;
   let check = null;
+  let checkTimer = null;
   let meta = {};
   /** The game picked in the header; ALL shows every game together (one cart on Cardmarket). */
   const ALL = '*';
@@ -270,12 +271,13 @@
   async function startCheck() {
     if (!store.checkTargets(items, favorites).length) return showToast(t('checkNothing'));
     if (store.isJobActive(job)) return showToast(t('errorBusy'));
+    if (ui.checkActive(check)) return showToast(t('errorChecking'));
     const tabs = onCardmarket ? [activeTab] : await chrome.tabs.query({ url: 'https://www.cardmarket.com/*' }).catch(() => []);
     for (const tab of tabs) {
       try {
         const reply = await chrome.tabs.sendMessage(tab.id, { type: 'cmcs.check' });
         if (reply && reply.ok) return;
-        if (reply && reply.error) return showToast(reply.error === 'busy' ? t('errorBusy') : t('errorUnknown'));
+        if (reply && reply.error) return showToast(reply.error === 'busy' ? t('errorBusy') : reply.error === 'checking' ? t('errorChecking') : t('errorUnknown'));
       } catch {
         // No content script in that tab (opened before the extension loaded): the next one.
       }
@@ -287,13 +289,16 @@
 
   function renderCheck() {
     const box = ui.checkBox(check, {
-      onStop: () => store.updateCheck((c) => (c ? { ...c, cancel: true } : undefined)),
+      onStop: () => store.cancelCheck(),
       onClose: () => store.updateCheck((c) => (c ? { ...c, acknowledged: true } : undefined)),
     });
     $('check').replaceChildren(...(box ? [box] : []));
     const active = check && (check.state === 'running' || check.state === 'pending') && box;
     $('check-now').hidden = !store.checkTargets(items, favorites).length;
     $('check-now').disabled = Boolean(active);
+    // A round whose tab went away stops saying so after two quiet minutes: draw again then.
+    clearTimeout(checkTimer);
+    if (active) checkTimer = setTimeout(load, Math.max(1000, (check.heartbeatAt || check.at || 0) + 2 * 60 * 1000 - Date.now() + 250));
   }
 
   /** Removals right after each other share one undo. */
@@ -846,7 +851,7 @@
     if (unavailable.length) {
       list.push(
         ui.sectionHead(t('groupUnavailable', unavailable.length), [
-          ui.sectionLink(t('checkShort'), () => startCheck(), { title: t('checkNow') }),
+          ui.sectionLink(t('checkShort'), () => startCheck(), { title: t('checkNow'), disabled: ui.checkActive(check) }),
           ui.sectionLink(t('clearUnavailable'), () => removeItems(unavailable)),
         ]),
         [...unavailable].sort(bySellerName).map(soldRow),

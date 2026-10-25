@@ -206,6 +206,9 @@
   "errorBusy": {
     "message": "Er worden al artikelen teruggezet — wacht tot dat klaar is."
   },
+  "errorChecking": {
+    "message": "Er wordt al gecontroleerd — even geduld tot dat klaar is."
+  },
   "errorCartUnreadable": {
     "message": "Je winkelmandje kon niet worden gelezen, dus er is niets toegevoegd (Cardmarket heeft mogelijk de opmaak veranderd). Deze extensie heeft waarschijnlijk een update nodig."
   },

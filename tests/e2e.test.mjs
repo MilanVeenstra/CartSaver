@@ -2439,6 +2439,145 @@ describe('Cardmarket Cart Saver', () => {
       }, 'pending check picked up', 30000);
       assert.equal(done.counts.checked, 4);
     });
+
+    it('while a check runs, its buttons wait; when its tab goes away, they come back', async () => {
+      await patchItems({ [EPHEMERATE]: { status: 'unavailable' } });
+      // A round going on in another Cardmarket tab: it holds the check's lock
+      // (and has been quiet for a while: a page that takes long).
+      await page.evaluate(() => {
+        navigator.locks.request('cmcs.check', () => new Promise((resolve) => (window.cmcsReleaseCheck = resolve)));
+      });
+      await sw.evaluate(() =>
+        chrome.storage.local.set({ 'cmcs.check': { state: 'running', at: Date.now() - 60000, heartbeatAt: Date.now() - 40000, total: 4, done: 1, counts: {} } }),
+      );
+      const refresh = widget(page).getByRole('button', { name: 'Controleren of je artikelen nog te koop zijn' });
+      await waitFor(() => refresh.isDisabled(), 'the panel button waits');
+      const popup = await context.newPage();
+      await popup.setViewportSize({ width: 400, height: 600 });
+      await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+      await popup.locator('#tab-cart').click();
+      await waitFor(() => popup.locator('#check-now').isDisabled(), 'the popup button waits');
+      const link = popup.locator('#list .cmcs-link', { hasText: /^Controleren$/ });
+      await waitFor(async () => (await link.count()) > 0, 'the section link');
+      assert.equal(await link.first().isDisabled(), true, 'and the section link');
+      await popup.close();
+      await new Promise((r) => setTimeout(r, 6000));
+      assert.equal((await check()).state, 'running', 'a live round is left alone');
+      // That tab closes mid-round: the round ends as stopped, the buttons come back.
+      await page.evaluate(() => window.cmcsReleaseCheck());
+      await waitFor(async () => (await check()).state === 'cancelled', 'the lost round ends', 15000);
+      assert.equal((await check()).done, 1);
+      await waitFor(async () => !(await refresh.isDisabled()), 'free again');
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.check': null }));
+    });
+
+    it('Stop on a check that waits for a Cardmarket tab: it does not start', async () => {
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.check': { state: 'pending', at: Date.now(), heartbeatAt: Date.now() } }));
+      const popup = await context.newPage();
+      await popup.setViewportSize({ width: 400, height: 600 });
+      await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+      await popup.locator('#tab-cart').click();
+      const stop = popup.locator('#check .cmcs-check').getByRole('button', { name: 'Stoppen' });
+      await waitFor(() => stop.isVisible(), 'waiting, with Stop');
+      await stop.click();
+      await waitFor(async () => (await check()).state === 'cancelled', 'stopped');
+      await waitFor(async () => (await popup.locator('#check .cmcs-check').count()) === 0, 'nothing left to show');
+      await popup.close();
+      await page.goto(`${CM}/en/Magic`);
+      await new Promise((r) => setTimeout(r, 2500));
+      assert.equal((await check()).state, 'cancelled', 'not started by the next Cardmarket page');
+    });
+
+    it("a waiting check skips Cloudflare's security check and runs on the page after it", async () => {
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.check': { state: 'pending', at: Date.now(), heartbeatAt: Date.now() } }));
+      mock.state.challengePages = 1;
+      await page.goto(`${CM}/en/Magic`);
+      assert.match(await page.title(), /Just a moment/);
+      await new Promise((r) => setTimeout(r, 2500));
+      assert.equal((await check()).state, 'pending', 'still waiting');
+      await page.goto(`${CM}/en/Magic`);
+      await waitFor(async () => (await check()).state === 'done', 'run on the real page', 30000);
+    });
+
+    it('marks an article sold only where a page plainly should show it', async () => {
+      const CHEAP = '1611110005'; // BudgetCards, 1.29
+      const SAME_SELLER = '1611110003'; // another Sol Ring of the same seller
+      const sameSellerPrice = mock.article(SAME_SELLER).price;
+      const runCheck = async () => {
+        const since = Date.now();
+        await sw.evaluate(async () => {
+          for (const tab of await chrome.tabs.query({ url: 'https://www.cardmarket.com/*' })) {
+            const reply = await chrome.tabs.sendMessage(tab.id, { type: 'cmcs.check' }).catch(() => null);
+            if (reply && reply.ok) return reply;
+          }
+          return null;
+        });
+        return waitFor(async () => {
+          const c = await check();
+          return c && c.state === 'done' && c.finishedAt >= since && c;
+        }, 'check finished', 30000);
+      };
+      // One saved article to look up, starred too.
+      const ring = (await items())[SOL_RING];
+      await sw.evaluate((ring) => chrome.storage.local.set({
+        'cmcs.items': { [ring.articleId]: { ...ring, status: 'missing', lastAttempt: null, lastCheck: null } },
+        'cmcs.favorites': { [ring.articleId]: { ...ring, status: undefined, unavailable: false, favoritedAt: Date.now() } },
+        'cmcs.check': null,
+      }), ring);
+      const offersBefore = new Map(mock.state.available);
+      try {
+        // Gone from the first offers of a product page that has more ("Show
+        // more results"): it may be further down there. Nothing changes.
+        // (Earlier tests leave other Sol Rings on sale: only the ones this test needs.)
+        for (const a of ARTICLES) if (a.name === 'Sol Ring') mock.state.available.delete(a.articleId);
+        mock.state.available.set(SOL_KINGDOM, mock.article(SOL_KINGDOM));
+        mock.state.available.set(CHEAP, mock.article(CHEAP));
+        mock.state.productMore = true;
+        let done = await runCheck();
+        assert.equal(done.counts.unsure, 1, `unsure: ${JSON.stringify(done.counts)}`);
+        assert.equal((await items())[SOL_RING].status, 'missing');
+        assert.equal((await items())[SOL_RING].lastCheck.ok, null);
+
+        // The seller has another Sol Ring, but the stock goes on on a next page: still unsure.
+        mock.article(SAME_SELLER).price = 1.19;
+        mock.state.available.set(SAME_SELLER, mock.article(SAME_SELLER));
+        mock.state.sellerPaged = true;
+        done = await runCheck();
+        assert.equal(done.counts.unsure, 1, 'unsure with more pages');
+        assert.equal((await items())[SOL_RING].status, 'missing');
+
+        // The seller's whole stock of Sol Rings, without this one: sold, in both tabs.
+        mock.state.sellerPaged = false;
+        done = await runCheck();
+        assert.equal(done.counts.gone, 1, 'sold');
+        assert.equal((await items())[SOL_RING].status, 'unavailable');
+        assert.equal((await items())[SOL_RING].lastAttempt.reason, 'sold');
+        assert.equal((await favorites())[SOL_RING].unavailable, true, 'the favourite says so too');
+
+        // Back on sale: it can go back, and the favourite is for sale again.
+        mock.state.available.set(SOL_RING, mock.article(SOL_RING));
+        done = await runCheck();
+        assert.equal(done.counts.back, 1);
+        assert.equal((await items())[SOL_RING].status, 'missing');
+        const fav = (await favorites())[SOL_RING];
+        assert.equal(fav.unavailable, false);
+        assert.equal(fav.lastCheck.ok, true);
+
+        // A product page that shows every offer like it, without this one: sold
+        // (whatever the seller's page says).
+        mock.state.available.delete(SOL_RING);
+        mock.state.sellerPaged = true;
+        mock.state.productMore = false;
+        done = await runCheck();
+        assert.equal(done.counts.gone, 1, 'sold: the whole list');
+      } finally {
+        mock.state.sellerPaged = false;
+        mock.state.productMore = false;
+        mock.article(SAME_SELLER).price = sameSellerPrice;
+        mock.state.available.clear();
+        for (const [id, a] of offersBefore) mock.state.available.set(id, a);
+      }
+    });
   });
 
   describe('Dutch or English, your choice', () => {
@@ -2649,7 +2788,9 @@ describe('Cardmarket Cart Saver', () => {
     assert.deepEqual(Object.keys(left).filter((key) => key.startsWith('cmcs.')), ['cmcs.settings']);
     assert.deepEqual(left['cmcs.settings'], { language: 'nl', cloudSync: true }, 'settings start over, except language and sync');
     assert.equal(await options.locator('#notify').isChecked(), true, 'the form shows the defaults');
-    assert.deepEqual(Object.keys(await sw.evaluate(() => chrome.storage.sync.get(null))).filter((key) => key !== 's'), [], 'nothing left in the sync');
+    const synced = await sw.evaluate(() => chrome.storage.sync.get(null));
+    assert.deepEqual(Object.keys(synced).filter((key) => key !== 's' && key !== '_e'), [], 'nothing left in the sync');
+    assert.equal(synced._e.cleared, true, 'a new copy, marked as wiped on purpose');
     await options.close();
   });
 });

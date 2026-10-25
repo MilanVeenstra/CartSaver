@@ -29,6 +29,7 @@
   let refreshSeq = 0;
   let pollTimer = null;
   let clockTimer = null;
+  let checkTimer = null;
   /** A one-off message (e.g. "favourite not on this page") until the user closes it. */
   let notice = null;
   /** The extension was updated or reloaded underneath this tab. */
@@ -238,7 +239,7 @@
   async function startCheck() {
     if (!checkable()) return showStrip(t('checkNothing'));
     const reply = await CMCS.check.start();
-    if (!reply.ok) showStrip(reply.error === 'busy' ? t('errorBusy') : t('errorUnknown'));
+    if (!reply.ok) showStrip(reply.error === 'busy' ? t('errorBusy') : reply.error === 'checking' ? t('errorChecking') : t('errorUnknown'));
   }
 
   /** Continue an interrupted job: the remaining articles become a new job (the cart is checked first). */
@@ -496,7 +497,7 @@
         'div',
         { class: 'cmcs-head' },
         ui.brand(20),
-        onCheck ? ui.iconButton(t('checkNow'), 'refresh', onCheck) : null,
+        onCheck ? ui.iconButton(t('checkNow'), 'refresh', onCheck, '', { disabled: ui.checkActive(state.check) }) : null,
         onCollapse ? ui.iconButton(t('collapse'), 'minus', onCollapse) : null,
         onClose ? ui.iconButton(t('close'), 'close', onClose) : null,
       ),
@@ -884,7 +885,7 @@
     if (unavailable.length) {
       body.push(
         ui.sectionHead(t('groupUnavailable', unavailable.length), [
-          ui.sectionLink(t('checkShort'), () => startCheck(), { title: t('checkNow') }),
+          ui.sectionLink(t('checkShort'), () => startCheck(), { title: t('checkNow'), disabled: ui.checkActive(state.check) }),
           ui.sectionLink(t('clearUnavailable'), () => removeItems(unavailable.map((item) => item.articleId))),
         ]),
         h('div', { class: 'cmcs-list' }, unavailable.map((item) => unavailableRow(item, { multiGame }))),
@@ -1226,6 +1227,15 @@
     clearTimeout(pollTimer);
     if (job && job.state === 'running' && !state.interrupted && !CMCS.refill.isRunning()) {
       pollTimer = setTimeout(refresh, 5000);
+    }
+
+    // A check running (or waiting) elsewhere: look again now and then. One
+    // whose tab closed ends as stopped; one that went quiet frees its buttons.
+    clearTimeout(checkTimer);
+    if (ui.checkActive(state.check) && !CMCS.check.isRunning()) {
+      checkTimer = setTimeout(async () => {
+        if (!(await CMCS.check.reapDead().catch(() => false))) render();
+      }, 5000);
     }
   }
 

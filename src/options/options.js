@@ -318,8 +318,15 @@
     await chrome.storage.local.remove(Object.keys(all).filter((key) => key.startsWith('cmcs.') && key !== store.KEYS.settings));
     await chrome.storage.local.set({ [store.KEYS.settings]: { language, cloudSync } });
     // And the copy in your browser sync, also when syncing is off here. Your
-    // other browsers that sync drop what came from it (they keep their own settings).
-    if (chrome.storage.sync) await chrome.storage.sync.clear().catch(() => {});
+    // other browsers that sync drop what came from it (they keep their own
+    // settings): the new copy's id names the old one, so they know it was wiped
+    // on purpose (an emptied copy without that is joined, never followed).
+    if (chrome.storage.sync) {
+      const { _e: old } = await chrome.storage.sync.get('_e').catch(() => ({}));
+      const prev = old && typeof old.id === 'string' ? [old.id, ...(Array.isArray(old.prev) ? old.prev : [])].slice(0, 10) : [];
+      await chrome.storage.sync.clear().catch(() => {});
+      await chrome.storage.sync.set({ _e: { id: crypto.randomUUID(), at: Date.now(), cleared: true, prev } }).catch(() => {});
+    }
     await chrome.permissions.remove({ origins: Object.values(store.ORIGINS) }).catch(() => {});
     fillForm(await store.getSettings());
     $('dataMessage').textContent = t('cleared');

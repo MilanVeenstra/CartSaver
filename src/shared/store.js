@@ -313,20 +313,26 @@
   }
 
   /**
-   * What a check "still for sale?" looks at: saved articles out of the cart
-   * (the longest unchecked first), then favourites that are not saved articles.
+   * What a check "still for sale?" looks at: saved articles out of the cart and
+   * favourites that are not saved articles, together, the longest unchecked
+   * first (saved articles first among equals). Over a few rounds every one of
+   * them gets its turn, also with more than one round's worth.
    */
   function checkTargets(items, favorites, max = 30) {
     const last = (a) => (a.lastCheck && a.lastCheck.at) || 0;
     const saved = Object.values(items || {})
       .filter((item) => item.status === STATUS.MISSING || item.status === STATUS.UNAVAILABLE)
-      .sort((a, b) => last(a) - last(b))
       .map((article) => ({ kind: 'item', article }));
+    // A favourite whose saved article is in the cart needs no look; one whose
+    // saved article is out of it is looked up as that article; an ignored one
+    // is looked up as a favourite.
     const favs = Object.values(favorites || {})
-      .filter((fav) => !(items || {})[fav.articleId])
-      .sort((a, b) => last(a) - last(b))
+      .filter((fav) => {
+        const item = fav && fav.articleId && (items || {})[fav.articleId];
+        return fav && fav.articleId && (!item || item.status === STATUS.IGNORED);
+      })
       .map((article) => ({ kind: 'favorite', article }));
-    return [...saved, ...favs].slice(0, max);
+    return [...saved, ...favs].sort((a, b) => last(a.article) - last(b.article)).slice(0, max);
   }
 
   /** A stable signature of the missing set, used to remember a dismissed reminder. */
@@ -610,6 +616,18 @@
     getCheck: () => get(KEYS.check, null),
     setCheck: (check) => set(KEYS.check, check),
     updateCheck: (fn) => update(KEYS.check, null, fn),
+    /**
+     * Stop a check: a running round stops after the article it is on; one that
+     * still waits for a Cardmarket tab does not start at all.
+     */
+    cancelCheck: () =>
+      update(KEYS.check, null, (check) =>
+        !check
+          ? undefined
+          : check.state === 'pending'
+            ? { ...check, cancel: true, state: 'cancelled', acknowledged: true, finishedAt: Date.now(), heartbeatAt: Date.now() }
+            : { ...check, cancel: true },
+      ),
     setJob: (job) => set(KEYS.job, job),
     updateJob: (fn) => update(KEYS.job, null, fn),
 
