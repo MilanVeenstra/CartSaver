@@ -384,6 +384,8 @@
       bytes: Math.max(0, bytes),
       records: count,
     };
+    // When another browser last brought something (the settings page shows it: "never" points at a setup problem).
+    status.lastReceivedAt = !error && status.received ? now : (state.status && state.status.lastReceivedAt) || null;
     // A failed write is tried again next round: only what went through counts as agreed.
     await chrome.storage.local.set({ [STATE_KEY]: { base: error ? state.base : base, at: error ? state.at : now, status } });
     return status;

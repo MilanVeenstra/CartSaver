@@ -31,6 +31,7 @@ html, body { margin: 0; background: var(--cmcs-bg); min-height: 100%; }
 .psa-note:empty { display: none; }
 .grant { margin-left: 34px; align-self: flex-start; }
 .sync-status { flex: 1; font-size: 12px; align-self: center; }
+.sync-warn { margin: 0; color: var(--cmcs-red); font-size: 12px; }
 .row input[type="number"] {
   width: 80px; font: inherit; padding: 5px 8px; color: var(--cmcs-text);
   background: transparent; border: 1.5px solid var(--cmcs-border-strong); border-radius: 0;

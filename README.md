@@ -35,6 +35,7 @@ replacement.
 |---|---|
 | **Remembered automatically** | Every article in your cart is saved, cards and sealed products alike (booster boxes, displays…): seller, condition, language, foil, price and quantity, with a picture. You do not have to do anything. |
 | **One click back** | One request per seller, and only what is really missing. So "1 of 2 in your cart" is topped up too. Use the checkboxes to choose what goes back. Changed your mind? *Undo*. |
+| **Still for sale?** | One click on the refresh button looks up your saved articles and favourites on Cardmarket: what is still for sale (and at what price), what sold, and what is for sale again. |
 | **Price history** | Every price an article had, with the date: in the cart, on offer pages you visit, and from your other browsers. Open a row for the list and a small chart. When something got more expensive, the top of the list says so in red ("1 article got more expensive (+€0.30)"). |
 | **The seller's description** | What the seller wrote about this one copy ("Slight whitening on the back") is kept and shown under the article. |
 | **Know what happened** | For each article you see whether the cart was emptied, whether the seller disappeared or only this article was sold, and whether the price changed. |

@@ -254,14 +254,18 @@ describe('Cardmarket Cart Saver', () => {
     const text = await widget(page).innerText();
     assert.match(text, /3 artikelen in je mandje zijn opgeslagen/);
     assert.match(text, /Niet meer beschikbaar \(1\)/i);
-    // The rarer actions of a sold article wait in its opened row.
-    await widget(page).locator(`.cmcs-item--unavailable[data-article-id="${EPHEMERATE}"] .cmcs-item-line`).click();
-    const alt = widget(page).getByRole('link', { name: 'Zoek vergelijkbaar aanbod' });
+    // One way to look for something else: "Find a replacement", with all similar offers under it.
+    const sold = widget(page).locator(`.cmcs-item--unavailable[data-article-id="${EPHEMERATE}"]`);
+    assert.equal(await sold.getByRole('link', { name: 'Zoek vergelijkbaar aanbod' }).count(), 0, 'no second button for the same');
+    await sold.getByRole('button', { name: 'Vervanging zoeken' }).click();
+    const alt = widget(page).getByRole('link', { name: 'Alle aanbiedingen op Cardmarket' });
+    await waitFor(() => alt.isVisible(), 'link to all offers');
     assert.equal(
       await alt.getAttribute('href'),
       `${CM}/en/Magic/Products/Singles/Modern-Horizons/Ephemerate?language=1&minCondition=2`,
     );
     await shot(page, '04-cart-panel');
+    await sold.getByRole('button', { name: 'Verberg vervanging' }).click();
   });
 
   it('shows everything in the popup', async () => {
@@ -510,8 +514,11 @@ describe('Cardmarket Cart Saver', () => {
 
     const row = popup.locator(`#fav-list [data-article-id="${SOL_KINGDOM}"]`);
     assert.match(await row.innerText(), /CardKingdomNL · 3 beschikbaar · bewaard/);
+    // On the row: in the cart and the star; the links wait in the opened row.
+    assert.equal(await row.locator('.cmcs-item-actions .cmcs-icon-btn').count(), 2);
+    await row.locator('.cmcs-item-line').click();
     assert.equal(
-      await row.getByRole('link', { name: 'Bekijk aanbieding op Cardmarket' }).getAttribute('href'),
+      await row.getByRole('link', { name: 'Op Cardmarket' }).getAttribute('href'),
       `${SOL_RING_URL}?language=3&minCondition=3#articleRow${SOL_KINGDOM}`,
     );
     assert.equal(
@@ -2342,6 +2349,98 @@ describe('Cardmarket Cart Saver', () => {
     });
   });
 
+  describe('is it still for sale? (the refresh button)', () => {
+    let MINT_PRICE;
+    const check = async () => (await storage())['cmcs.check'];
+
+    before(async () => {
+      MINT_PRICE = mock.article(SOL_MINT).price;
+      for (const id of [MAGE, EPHEMERATE, SOL_RING, SOL_MINT]) mock.state.available.set(id, mock.article(id));
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.job': null, 'cmcs.items': {}, 'cmcs.favorites': {}, 'cmcs.check': null }));
+      // Saved from the cart (with their sellers), then the cart emptied.
+      mock.state.cart = new Map([[MAGE, 1], [EPHEMERATE, 1], [SOL_RING, 1]]);
+      await page.goto(`${CM}/en/Magic/ShoppingCart`);
+      await waitFor(async () => Object.keys(await items()).length === 3, 'three saved');
+      mock.state.cart = new Map();
+      await patchItems({
+        [MAGE]: { status: 'missing', missingReason: 'emptied' },
+        [EPHEMERATE]: { status: 'missing', missingReason: 'emptied' },
+        [SOL_RING]: { status: 'unavailable', lastAttempt: { at: Date.now(), ok: false, reason: 'sold', message: 'This article is no longer available.' } },
+      });
+      // A favourite, whose price went up since.
+      const a = mock.article(SOL_MINT);
+      await sw.evaluate((fav) => chrome.storage.local.set({ 'cmcs.favorites': { [fav.articleId]: fav } }), {
+        articleId: SOL_MINT, productId: a.productId, game: 'Magic', lang: 'en', name: a.name, expansion: a.expansion, productUrl: SOL_RING_URL,
+        sellerUrl: `${CM}/en/Magic/Users/${a.seller}`, seller: a.seller, condition: a.condition, conditionLabel: a.conditionLabel,
+        language: a.language, languageLabel: a.languageLabel, foil: Boolean(a.foil), extras: a.foil ? ['Foil'] : [], price: MINT_PRICE,
+        priceHistory: [{ at: Date.now() - 86400000, price: MINT_PRICE }], favoritedAt: Date.now(), unavailable: false,
+      });
+      // Meanwhile on Cardmarket: one sold, the sold one back, the favourite dearer.
+      mock.state.available.delete(EPHEMERATE);
+      mock.article(SOL_MINT).price = Math.round((MINT_PRICE + 0.4) * 100) / 100;
+    });
+    after(async () => {
+      mock.state.available.set(EPHEMERATE, mock.article(EPHEMERATE));
+      mock.article(SOL_MINT).price = MINT_PRICE;
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.favorites': {}, 'cmcs.check': null }));
+    });
+
+    it('looks every article up on Cardmarket and says what it found', async () => {
+      await page.goto(`${CM}/en/Magic`);
+      await waitFor(() => widget(page).isVisible(), 'reminder');
+      assert.ok(await widget(page).getByRole('button', { name: 'Controleren of je artikelen nog te koop zijn' }).isVisible(), 'refresh in the panel');
+
+      const popup = await context.newPage();
+      await popup.setViewportSize({ width: 400, height: 600 });
+      await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+      await popup.locator('#tab-cart').click();
+      await waitFor(() => popup.locator('#check-now').isVisible(), 'refresh in the popup');
+      await popup.locator('#check-now').click();
+      const done = await waitFor(async () => {
+        const c = await check();
+        return c && c.state === 'done' && c;
+      }, 'check finished', 30000);
+      assert.deepEqual(done.counts, { checked: 4, forSale: 3, gone: 1, back: 1, up: 1, unsure: 0 });
+
+      const all = await items();
+      assert.equal(all[MAGE].status, 'missing', 'still for sale: can go back');
+      assert.equal(all[MAGE].lastCheck.ok, true);
+      assert.equal(all[EPHEMERATE].status, 'unavailable', 'sold');
+      assert.equal(all[EPHEMERATE].lastAttempt.reason, 'sold');
+      assert.equal(all[SOL_RING].status, 'missing', 'for sale again: can go back');
+      assert.equal(all[SOL_RING].lastAttempt, null);
+      const fav = (await favorites())[SOL_MINT];
+      assert.deepEqual(fav.priceHistory.map((p) => p.price), [MINT_PRICE, mock.article(SOL_MINT).price]);
+      assert.equal(fav.unavailable, false);
+
+      const box = popup.locator('#check .cmcs-check');
+      await waitFor(async () => /4 artikelen gecontroleerd\./.test(await box.innerText().catch(() => '')), 'said in the popup');
+      assert.match(await box.innerText(), /3 nog te koop · 1 niet meer te koop · 1 weer te koop · 1 duurder geworden/);
+      await waitFor(async () => /4 artikelen gecontroleerd/.test(await widget(page).innerText()), 'and in the panel');
+      await shot(popup, '33-check-done');
+
+      // The sold one says so, also when opened.
+      const sold = popup.locator(`#list .cmcs-item[data-article-id="${EPHEMERATE}"]`);
+      await sold.locator('.cmcs-item-line').click();
+      assert.match(await sold.innerText(), /Gecontroleerd op .*: niet meer te vinden\./);
+
+      await box.getByRole('button', { name: 'Sluiten' }).click();
+      await waitFor(async () => (await popup.locator('#check .cmcs-check').count()) === 0, 'closed');
+      assert.equal((await check()).acknowledged, true);
+      await popup.close();
+    });
+
+    it('a check asked for without an open Cardmarket tab runs once one opens', async () => {
+      await sw.evaluate(() => chrome.storage.local.set({ 'cmcs.check': { state: 'pending', at: Date.now(), heartbeatAt: Date.now() } }));
+      await page.goto(`${CM}/en/Magic`);
+      const done = await waitFor(async () => {
+        const c = await check();
+        return c && c.state === 'done' && c;
+      }, 'pending check picked up', 30000);
+      assert.equal(done.counts.checked, 4);
+    });
+  });
+
   describe('Dutch or English, your choice', () => {
     let cart;
     const setLanguage = (language) =>
@@ -2490,6 +2589,17 @@ describe('Cardmarket Cart Saver', () => {
       await waitFor(async () => /3 artikelen kunnen terug/.test(await widget(page).innerText()), 'copies');
       assert.ok(await widget(page).getByRole('button', { name: /^Zet 3 terug in je mandje/ }).isVisible());
     });
+  });
+
+  it('the settings say why your other browsers may not see this one (a ZIP install without a fixed key)', async () => {
+    const options = await context.newPage();
+    await options.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await waitFor(async () => /Deze installatie: ID .{4}….{4} \(ZIP-versie\)/.test(await options.locator('#syncDiag').innerText().catch(() => '')), 'diagnosis');
+    assert.match(await options.locator('#syncDiag').innerText(), /ontvangen van een andere browser/);
+    assert.equal(await options.locator('#syncDiag').getAttribute('title'), extensionId);
+    assert.ok(await options.locator('#syncWarn').isVisible(), 'the warning about the ID');
+    assert.match(await options.locator('#syncWarn').innerText(), /eigen ID/);
+    await options.close();
   });
 
   it('options page shows the saved data and stores settings', async () => {

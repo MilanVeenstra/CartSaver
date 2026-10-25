@@ -329,6 +329,13 @@
         item.comment ? h('div', { class: 'cmcs-item-meta cmcs-item-comment cmcs-wrap', title: t('commentTitle', item.comment) }, `“${item.comment}”`) : null,
         info.map((l) => h('div', { class: `cmcs-item-note ${l.warn ? 'cmcs-item-note--warn' : ''}`, title: l.raw || null }, l.text)),
         opts.history === false ? null : priceHistoryBlock(item),
+        item.lastCheck && item.lastCheck.at
+          ? h(
+              'div',
+              { class: 'cmcs-item-note' },
+              t(item.lastCheck.ok ? 'checkedForSale' : item.lastCheck.ok === false ? 'checkedGone' : 'checkedUnsure', shortDateTime(item.lastCheck.at)),
+            )
+          : null,
         opts.details && opts.details.length ? h('div', { class: 'cmcs-item-buttons' }, opts.details) : null,
       );
     }
@@ -413,6 +420,59 @@
       h('div', { class: 'cmcs-history-head' }, h('span', null, t('priceHistoryTitle')), sparkline(history)),
       rows,
       hidden > 0 ? h('div', { class: 'cmcs-item-note' }, CMCS.tn('priceHistoryMore', hidden, hidden)) : null,
+    );
+  }
+
+  /** "25 Oct, 14:05". */
+  function shortDateTime(ts) {
+    if (!ts) return '';
+    return new Date(ts).toLocaleString(CMCS.locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  /** How long a finished check stays on screen until it is closed. */
+  const CHECK_SHOWN_MS = 60 * 60 * 1000;
+
+  /**
+   * The check "are my articles still for sale?": its progress (with Stop), or
+   * what it found (with ×). Null when there is nothing to show.
+   */
+  function checkBox(check, { onStop, onClose, now = Date.now() } = {}) {
+    const t = CMCS.t;
+    if (!check) return null;
+    const stale = (check.state === 'running' || check.state === 'pending') && now - (check.heartbeatAt || check.at || 0) > 2 * 60 * 1000;
+    if (stale) return null;
+    if (check.state === 'pending' || check.state === 'running') {
+      const total = check.total || 0;
+      const pct = total ? Math.round(((check.done || 0) / total) * 100) : 0;
+      return h(
+        'div',
+        { class: 'cmcs-check', role: 'status' },
+        h('div', { class: 'cmcs-check-text' }, check.state === 'pending' ? t('checkWaiting') : t('checkRunning', check.done || 0, total)),
+        check.current ? h('div', { class: 'cmcs-item-note' }, check.current) : null,
+        check.state === 'running' ? h('div', { class: 'cmcs-progress' }, h('div', { style: `width:${pct}%` })) : null,
+        onStop && !check.cancel ? h('button', { type: 'button', class: 'cmcs-btn cmcs-btn--ghost cmcs-btn--small', onclick: onStop }, t('stop')) : null,
+      );
+    }
+    if (check.acknowledged || now - (check.finishedAt || check.at || 0) > CHECK_SHOWN_MS) return null;
+    const c = check.counts || {};
+    let text;
+    if (check.state === 'error') text = t('checkError', errorText(check.error) || t('errorUnknown'));
+    else if (check.state === 'cancelled') text = t('checkStopped', check.done || 0, check.total || 0);
+    else if (!check.total) text = t('checkNothing');
+    else text = CMCS.tn('checkDone', c.checked || 0, c.checked || 0);
+    const parts = [
+      c.forSale ? t('checkForSale', c.forSale) : null,
+      c.gone ? t('checkGoneCount', c.gone) : null,
+      c.back ? t('checkBackCount', c.back) : null,
+      c.up ? t('checkPriceUpCount', c.up) : null,
+      c.unsure ? t('checkUnsureCount', c.unsure) : null,
+    ].filter(Boolean);
+    const warn = check.state === 'error' || c.gone || c.up;
+    return h(
+      'div',
+      { class: `cmcs-check cmcs-check--done ${warn ? 'cmcs-check--warn' : ''}`, role: 'status' },
+      h('div', { class: 'cmcs-check-text' }, h('strong', null, text), parts.length ? h('span', null, parts.join(' · ')) : null),
+      onClose ? iconButton(t('close'), 'close', onClose) : null,
     );
   }
 
@@ -651,6 +711,7 @@
       display: inline-flex; align-items: center; justify-content: center; text-decoration: none; flex: none;
     }
     .cmcs-icon-btn:hover { color: var(--cmcs-text); background: var(--cmcs-surface); }
+    .cmcs-icon-btn:disabled { opacity: 0.35; cursor: default; background: none; }
     .cmcs-icon-btn svg { width: 16px; height: 16px; }
     .cmcs-icon-btn--star { color: var(--cmcs-text); }
     .cmcs-link {
@@ -694,6 +755,11 @@
     .cmcs-spark { display: block; color: var(--cmcs-muted); flex: none; }
     .cmcs-spark-dot { fill: var(--cmcs-text); }
     .cmcs-spark-up { fill: var(--cmcs-red); }
+    .cmcs-check { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 10px; padding: 10px 6px 10px 12px; margin: 8px 0 4px; background: var(--cmcs-surface); border-left: 3px solid var(--cmcs-text); }
+    .cmcs-check > .cmcs-check-text, .cmcs-check > .cmcs-progress, .cmcs-check > .cmcs-item-note { flex: 1 1 100%; }
+    .cmcs-check--done > .cmcs-check-text { flex: 1 1 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .cmcs-check--done .cmcs-icon-btn { margin-top: -4px; }
+    .cmcs-check--warn { border-left-color: var(--cmcs-red); }
     .cmcs-price-up { margin: 0; color: var(--cmcs-red); font-weight: 700; font-size: 12px; }
     .cmcs-item-note { font-size: 12px; color: var(--cmcs-muted); }
     .cmcs-item-note--warn { color: var(--cmcs-red); }
@@ -788,6 +854,8 @@
     footBar,
     dollars,
     shortDate,
+    shortDateTime,
+    checkBox,
     priceHistoryBlock,
     pricesUpLine,
     STYLES,

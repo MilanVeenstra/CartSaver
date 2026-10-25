@@ -48,6 +48,11 @@
       CMCS.refill.undo(message.jobId).then(sendResponse, (err) => sendResponse({ ok: false, error: err.message }));
       return true;
     }
+    if (message.type === 'cmcs.check') {
+      // "Are my articles still for sale?" from the popup: this tab looks them up.
+      CMCS.check.start().then(sendResponse, (err) => sendResponse({ ok: false, error: err.message }));
+      return true;
+    }
     if (message.type === 'cmcs.sync') {
       withSyncLock(syncFromServer)
         .then(() => sendResponse({ ok: true }))
@@ -391,4 +396,5 @@
   await safely('favourites', () => CMCS.favorites.init(loc));
   await safely('PSA values', () => CMCS.psaLabels.init(loc));
   await safely('refill', () => CMCS.refill.resumePending());
+  await safely('check', () => CMCS.check.resumePending());
 })();

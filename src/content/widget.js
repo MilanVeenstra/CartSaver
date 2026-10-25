@@ -85,6 +85,7 @@
     .cmcs-replace { margin: -2px 0 8px 40px; padding: 6px 10px; background: var(--cmcs-surface); }
     .cmcs-replace .cmcs-item:first-of-type { border-top: 0; }
     .cmcs-replace .cmcs-item-meta:last-child { white-space: normal; }
+    .cmcs-replace-more { display: inline-block; margin: 6px 0 2px; font-size: 12px; }
     .cmcs-replace-title { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--cmcs-muted); margin: 0 -4px 2px 0; }
     .cmcs-result { display: flex; align-items: flex-start; gap: 10px; padding: 10px 6px 10px 12px; margin: 6px 0 4px; background: var(--cmcs-surface); border-left: 3px solid var(--cmcs-text); }
     .cmcs-result--warn { border-left-color: var(--cmcs-red); }
@@ -176,7 +177,7 @@
   async function refresh() {
     if (orphaned) return;
     const seq = (refreshSeq += 1);
-    const [items, favorites, job, settings, meta, carts, psa] = await Promise.all([
+    const [items, favorites, job, settings, meta, carts, psa, check] = await Promise.all([
       store.getItems(),
       store.getFavorites(),
       store.getJob(),
@@ -184,12 +185,13 @@
       store.getMeta(),
       store.getCarts(),
       store.getPsa(),
+      store.getCheck(),
     ]);
     const interrupted = await isInterrupted(job);
     // A slower, older refresh must not paint over a newer one.
     if (seq !== refreshSeq) return;
     ui.setPsa(psa.cards);
-    state = { items, favorites, job, settings, meta, carts, interrupted };
+    state = { items, favorites, job, settings, meta, carts, interrupted, check };
     render();
   }
 
@@ -227,6 +229,16 @@
       render();
     }, action ? 8000 : 4000);
     render();
+  }
+
+  /** Is there anything the refresh button could look up (saved articles out of the cart, favourites)? */
+  const checkable = () => CMCS.check.targetsOf(state.items || {}, state.favorites || {}).length > 0;
+
+  /** The refresh button: are the saved articles and favourites still for sale on Cardmarket? */
+  async function startCheck() {
+    if (!checkable()) return showStrip(t('checkNothing'));
+    const reply = await CMCS.check.start();
+    if (!reply.ok) showStrip(reply.error === 'busy' ? t('errorBusy') : t('errorUnknown'));
   }
 
   /** Continue an interrupted job: the remaining articles become a new job (the cart is checked first). */
@@ -471,7 +483,12 @@
    * The panel: logo and wordmark on top (with minimise / close), an optional
    * title, the body, and an optional footer (the big black button).
    */
-  function shell({ title, onClose, onCollapse, footer } = {}, ...body) {
+  function shell({ title, onClose, onCollapse, footer, onCheck } = {}, ...body) {
+    // The check "still for sale?": its progress or outcome on top, whatever the panel shows.
+    const check = ui.checkBox(state.check, {
+      onStop: () => CMCS.check.cancel(),
+      onClose: () => store.updateCheck((c) => (c ? { ...c, acknowledged: true } : undefined)),
+    });
     return h(
       'section',
       { class: 'cmcs-panel', role: 'region', 'aria-label': 'Cart Saver' },
@@ -479,10 +496,11 @@
         'div',
         { class: 'cmcs-head' },
         ui.brand(20),
+        onCheck ? ui.iconButton(t('checkNow'), 'refresh', onCheck) : null,
         onCollapse ? ui.iconButton(t('collapse'), 'minus', onCollapse) : null,
         onClose ? ui.iconButton(t('close'), 'close', onClose) : null,
       ),
-      h('div', { class: 'cmcs-body' }, title ? h('h2', { class: 'cmcs-view-title' }, title) : null, body),
+      h('div', { class: 'cmcs-body' }, check, title ? h('h2', { class: 'cmcs-view-title' }, title) : null, body),
       strip
         ? h(
             'div',
@@ -710,6 +728,10 @@
       { class: 'cmcs-replace' },
       h('div', { class: 'cmcs-replace-title' }, h('span', null, t('replaceTitle')), ui.iconButton(t('close'), 'close', () => findReplacement(item))),
       body,
+      // Not what you want: everything like it on Cardmarket (same language, at least this condition).
+      cm.alternativesUrl(item)
+        ? h('a', { class: 'cmcs-link cmcs-replace-more', href: cm.alternativesUrl(item), target: '_blank', rel: 'noopener' }, t('replaceMoreOnCardmarket'))
+        : null,
     );
   }
 
@@ -730,11 +752,6 @@
         below: alt
           ? h('button', { type: 'button', class: 'cmcs-link', 'aria-expanded': String(Boolean(open)), onclick: () => findReplacement(item) }, open ? t('replaceHide') : t('replaceFind'))
           : null,
-        // Room for the name: the rarer actions wait in the opened row.
-        details: [
-          state.items[item.articleId] ? ui.detailButton(t('retryOne'), () => refill([item.articleId])) : null,
-          alt ? ui.detailButton(t('findAlternative'), null, { href: alt }) : null,
-        ].filter(Boolean),
         actions: [ui.iconButton(t('removeFromSaved'), 'close', remove)],
       }),
       replacementPanel(item),
@@ -843,20 +860,12 @@
               render();
             },
           }),
-          // The same as in the popup: put back, open, similar offers, star, remove.
+          // The same as in the popup: put back, open, ignore, star.
           details: [
             ui.detailButton(t('detailRefillOne'), () => { openId = null; refill([item.articleId]); }, { strong: true }),
             ui.detailButton(t('detailOpen'), null, { href: cm.offerUrl(item) || item.productUrl }),
             ui.detailButton(t('detailIgnore'), () => ignoreItems([item.articleId]), { title: t('ignoreHint') }),
-            cm.alternativesUrl(item)
-              ? h('a', { class: 'cmcs-detail-btn', href: cm.alternativesUrl(item), title: t('findAlternative'), 'aria-label': t('findAlternative') }, ui.icon('search'))
-              : null,
             starButton(item),
-            h(
-              'button',
-              { type: 'button', class: 'cmcs-detail-btn', title: t('removeFromSaved'), 'aria-label': t('removeFromSaved'), onclick: () => removeItems([item.articleId]) },
-              ui.icon('close'),
-            ),
           ].filter(Boolean),
         });
       const groups = store.groupBy([...missing].sort(bySellerName), (item) => item.seller || '—');
@@ -875,7 +884,7 @@
     if (unavailable.length) {
       body.push(
         ui.sectionHead(t('groupUnavailable', unavailable.length), [
-          ui.sectionLink(t('retryUnavailable'), () => refill(unavailable.map((item) => item.articleId))),
+          ui.sectionLink(t('checkShort'), () => startCheck(), { title: t('checkNow') }),
           ui.sectionLink(t('clearUnavailable'), () => removeItems(unavailable.map((item) => item.articleId))),
         ]),
         h('div', { class: 'cmcs-list' }, unavailable.map((item) => unavailableRow(item, { multiGame }))),
@@ -900,7 +909,7 @@
                   withGame: multiGame,
                   href: cm.offerUrl(item) || item.productUrl,
                   actions: [
-                    ui.iconButton(t('refillOne'), 'refresh', () => refill([item.articleId])),
+                    ui.iconButton(t('refillOne'), 'cart', () => refill([item.articleId])),
                     ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item.articleId])),
                   ],
                 }),
@@ -937,7 +946,7 @@
             : null,
         )
       : null;
-    return shell({ onCollapse: () => setCollapsed(true), footer }, body);
+    return shell({ onCollapse: () => setCollapsed(true), onCheck: checkable() ? startCheck : null, footer }, body);
   }
 
   /** Saved lists on the cart page: save the current list under a name, or put a saved one back. */
@@ -1091,6 +1100,7 @@
       {
         title: t('reminderTitle'),
         onClose: dismissReminder,
+        onCheck: checkable() ? startCheck : null,
         footer: ui.primaryButton(t('refillButton', store.copiesToReturn(missing)), store.formatPrice(value), () => refill(missing.map((item) => item.articleId))),
       },
       h('p', { class: 'cmcs-lead cmcs-muted' }, CMCS.tn('reminderLead', store.copiesToReturn(missing), store.copiesToReturn(missing), store.formatPrice(value))),

@@ -14,6 +14,7 @@
   document.documentElement.lang = shownLang;
   $('brand').append(ui.brand(20));
   $('options').append(ui.icon('settings'));
+  $('check-now').append(ui.icon('refresh'));
 
   // NL | EN in the header. The popup starts over in the new language.
   function paintLanguage() {
@@ -38,6 +39,7 @@
   let favorites = {};
   let carts = [];
   let job = null;
+  let check = null;
   let meta = {};
   /** The game picked in the header; ALL shows every game together (one cart on Cardmarket). */
   const ALL = '*';
@@ -79,6 +81,7 @@
     activeTab && activeTab.url && activeTab.url.startsWith(cm.ORIGIN) ? cm.parseLocation(activeTab.url) : null;
   const onCardmarket = Boolean(tabLoc && tabLoc.lang && tabLoc.game);
 
+  $('check-now').addEventListener('click', () => startCheck());
   $('options').addEventListener('click', (event) => {
     event.preventDefault();
     chrome.runtime.openOptionsPage();
@@ -257,6 +260,40 @@
     notice = t('refillQueued');
     render();
     await openUrl(cm.cartUrl(lang, list[0].game));
+  }
+
+  /**
+   * The refresh button: are the saved articles and favourites still for sale?
+   * A Cardmarket tab looks them up (that is where the pages can be read): this
+   * one, another open one, or else the cart page, opened for it.
+   */
+  async function startCheck() {
+    if (!store.checkTargets(items, favorites).length) return showToast(t('checkNothing'));
+    if (store.isJobActive(job)) return showToast(t('errorBusy'));
+    const tabs = onCardmarket ? [activeTab] : await chrome.tabs.query({ url: 'https://www.cardmarket.com/*' }).catch(() => []);
+    for (const tab of tabs) {
+      try {
+        const reply = await chrome.tabs.sendMessage(tab.id, { type: 'cmcs.check' });
+        if (reply && reply.ok) return;
+        if (reply && reply.error) return showToast(reply.error === 'busy' ? t('errorBusy') : t('errorUnknown'));
+      } catch {
+        // No content script in that tab (opened before the extension loaded): the next one.
+      }
+    }
+    await store.setCheck({ state: 'pending', at: Date.now(), heartbeatAt: Date.now() });
+    const first = Object.values(items)[0] || Object.values(favorites)[0] || {};
+    await openUrl(cm.cartUrl(langFor([first]), first.game || (tabLoc && tabLoc.game) || 'Magic'));
+  }
+
+  function renderCheck() {
+    const box = ui.checkBox(check, {
+      onStop: () => store.updateCheck((c) => (c ? { ...c, cancel: true } : undefined)),
+      onClose: () => store.updateCheck((c) => (c ? { ...c, acknowledged: true } : undefined)),
+    });
+    $('check').replaceChildren(...(box ? [box] : []));
+    const active = check && (check.state === 'running' || check.state === 'pending') && box;
+    $('check-now').hidden = !store.checkTargets(items, favorites).length;
+    $('check-now').disabled = Boolean(active);
   }
 
   /** Removals right after each other share one undo. */
@@ -507,9 +544,6 @@
     return ui.iconButton(label, on ? 'starFilled' : 'star', () => store.toggleFavorite(article), on ? 'cmcs-icon-btn--star' : '');
   }
 
-  const detailIcon = (label, iconName, onClick) =>
-    h('button', { type: 'button', class: 'cmcs-detail-btn', title: label, 'aria-label': label, onclick: onClick }, ui.icon(iconName));
-
   const toggleRow = (id) => () => {
     openId = openId === id ? null : id;
     render();
@@ -745,9 +779,7 @@
           ui.detailButton(t('detailRefillOne'), () => { openId = null; refill([item]); }, { strong: true }),
           ui.detailButton(t('detailOpen'), null, { href: cm.offerUrl(item) || item.productUrl }),
           ui.detailButton(t('detailIgnore'), () => ignoreItems([item]), { title: t('ignoreHint') }),
-          cm.alternativesUrl(item) ? h('a', { class: 'cmcs-detail-btn', href: cm.alternativesUrl(item), target: '_blank', rel: 'noopener', title: t('findAlternative'), 'aria-label': t('findAlternative') }, ui.icon('search')) : null,
           starButton(item, true),
-          detailIcon(t('removeFromSaved'), 'close', () => removeItems([item])),
         ].filter(Boolean),
       });
     // Ignored: grey, out of every count; put back after all, or off the list.
@@ -756,7 +788,7 @@
         withGame: multiGame,
         href: cm.offerUrl(item) || item.productUrl,
         actions: [
-          ui.iconButton(t('refillOne'), 'refresh', () => refill([item])),
+          ui.iconButton(t('refillOne'), 'cart', () => refill([item])),
           ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item])),
         ],
       });
@@ -793,8 +825,6 @@
               t('replaceFind'),
             )
           : null,
-        // Room for the name: the rarer actions wait in the opened row.
-        details: [ui.detailButton(t('retryOne'), () => refill([item])), alt ? ui.detailButton(t('findAlternative'), null, { href: alt }) : null].filter(Boolean),
         actions: [ui.iconButton(t('removeFromSaved'), 'close', () => removeItems([item]))],
       });
     };
@@ -816,7 +846,7 @@
     if (unavailable.length) {
       list.push(
         ui.sectionHead(t('groupUnavailable', unavailable.length), [
-          ui.sectionLink(t('retryUnavailable'), () => refill(unavailable)),
+          ui.sectionLink(t('checkShort'), () => startCheck(), { title: t('checkNow') }),
           ui.sectionLink(t('clearUnavailable'), () => removeItems(unavailable)),
         ]),
         [...unavailable].sort(bySellerName).map(soldRow),
@@ -949,11 +979,19 @@
               note: sold ? t('notAvailableAnymore') : inCart ? t('favInCartNote') : undefined,
               noteTitle: sold ? fav.unavailableMessage || null : null,
               extraMeta: open ? null : facts,
-              details: [h('p', { class: 'row-hint cmcs-wrap' }, facts)],
+              details: [
+                h('p', { class: 'row-hint cmcs-wrap' }, facts),
+                h(
+                  'div',
+                  { class: 'cmcs-item-buttons' },
+                  [
+                    offer ? ui.detailButton(t('detailOpen'), null, { href: offer }) : null,
+                    seller ? ui.detailButton(t('favSellerOffers'), null, { href: seller }) : null,
+                  ].filter(Boolean),
+                ),
+              ],
               actions: [
                 inCart || sold ? null : ui.iconButton(t('favAddToCart'), 'cart', () => addFavoritesToCart([fav])),
-                offer ? ui.iconLink(t('favOpenOffer'), 'external', offer) : null,
-                seller ? ui.iconLink(t('favSellerOffers'), 'user', seller) : null,
                 ui.iconButton(t('favRemove'), 'starFilled', () => unstar(fav), 'cmcs-icon-btn--star'),
               ].filter(Boolean),
             });
@@ -1068,6 +1106,7 @@
     renderTabs();
     renderAccount();
     renderJob();
+    renderCheck();
     renderFavorites();
     renderCart();
     renderCarts();
@@ -1077,7 +1116,7 @@
   async function load() {
     let thumbs;
     let psa;
-    [items, favorites, job, carts, thumbs, meta, psa] = await Promise.all([
+    [items, favorites, job, carts, thumbs, meta, psa, check] = await Promise.all([
       store.getItems(),
       store.getFavorites(),
       store.getJob(),
@@ -1085,6 +1124,7 @@
       store.getThumbs(),
       store.getMeta(),
       store.getPsa(),
+      store.getCheck(),
     ]);
     ui.setThumbs(thumbs);
     ui.setPsa(psa.cards);

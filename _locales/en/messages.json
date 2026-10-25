@@ -77,6 +77,60 @@
   "cartsUpdated": {
     "message": "“$1” updated with your current list."
   },
+  "checkBackCount": {
+    "message": "$1 for sale again"
+  },
+  "checkDone": {
+    "message": "$1 articles checked."
+  },
+  "checkDoneOne": {
+    "message": "1 article checked."
+  },
+  "checkError": {
+    "message": "Check stopped: $1"
+  },
+  "checkForSale": {
+    "message": "$1 still for sale"
+  },
+  "checkGone": {
+    "message": "Not found in the check: sold or taken offline."
+  },
+  "checkGoneCount": {
+    "message": "$1 no longer for sale"
+  },
+  "checkNothing": {
+    "message": "Nothing to check: everything is in your cart."
+  },
+  "checkNow": {
+    "message": "Check whether your articles are still for sale"
+  },
+  "checkPriceUpCount": {
+    "message": "$1 got more expensive"
+  },
+  "checkRunning": {
+    "message": "Checking whether your articles are still for sale… $1 of $2"
+  },
+  "checkShort": {
+    "message": "Check"
+  },
+  "checkStopped": {
+    "message": "Check stopped after $1 of $2."
+  },
+  "checkUnsureCount": {
+    "message": "$1 unsure"
+  },
+  "checkWaiting": {
+    "message": "The check starts once Cardmarket is open…"
+  },
+  "checkedForSale": {
+    "message": "Checked on $1: still for sale."
+  },
+  "checkedGone": {
+    "message": "Checked on $1: not found anymore."
+  },
+  "checkedUnsure": {
+    "message": "Checked on $1: unsure (not found among the cheaper offers)."
+  },
   "clearAll": {
     "message": "Delete everything"
   },
@@ -241,9 +295,6 @@
   },
   "favNotOnPageTitle": {
     "message": "Favourite not on this page"
-  },
-  "favOpenOffer": {
-    "message": "View offer on Cardmarket"
   },
   "favRemove": {
     "message": "Remove from favourites"
@@ -617,6 +668,9 @@
   "replaceMore": {
     "message": "$1 more"
   },
+  "replaceMoreOnCardmarket": {
+    "message": "All offers on Cardmarket"
+  },
   "replaceNone": {
     "message": "No similar offer found."
   },
@@ -646,12 +700,6 @@
   },
   "resultFavoritesFailed": {
     "message": "Favourites that did not work: $1."
-  },
-  "retryOne": {
-    "message": "Try again"
-  },
-  "retryUnavailable": {
-    "message": "Try again"
   },
   "saveCartNow": {
     "message": "Read the cart now"
@@ -839,6 +887,21 @@
   "syncFull": {
     "message": "$1 only in this browser for now: the sync is full."
   },
+  "syncIdWarning": {
+    "message": "Note: this ZIP version has its own ID, which depends on the folder it is in. Your other browsers only see this data under exactly the same ID. That works with the version from the Chrome Web Store, or with a ZIP version with a fixed key."
+  },
+  "syncInstallStore": {
+    "message": "Chrome Web Store"
+  },
+  "syncInstallUnpacked": {
+    "message": "ZIP version"
+  },
+  "syncLastReceived": {
+    "message": "last received something from another browser: $1"
+  },
+  "syncNeverReceived": {
+    "message": "never received anything from another browser"
+  },
   "syncNotYet": {
     "message": "Not synced yet."
   },
@@ -847,6 +910,9 @@
   },
   "syncStatus": {
     "message": "Synced: $1 · $2 KB of about 100 KB."
+  },
+  "syncThisInstall": {
+    "message": "This install: ID $1 ($2)"
   },
   "syncTitle": {
     "message": "Your other browsers"

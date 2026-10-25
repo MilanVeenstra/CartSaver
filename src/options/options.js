@@ -97,11 +97,29 @@
     await chrome.runtime.sendMessage({ type: 'cmcs.syncNow' }).catch(() => null);
     renderSyncStatus();
   });
+  // Sync only meets your other browsers under the same extension ID: a ZIP
+  // (unpacked) install gets an ID from its folder, unless the manifest has a fixed key.
+  const install = await chrome.management.getSelf().catch(() => null);
+  const unpacked = Boolean(install && install.installType === 'development');
+  const fixedId = Boolean(chrome.runtime.getManifest().key);
+
   async function renderSyncStatus() {
     const current = await store.getSettings();
     $('syncBox').hidden = !current.cloudSync;
     const { 'cmcs.sync': state } = await chrome.storage.local.get('cmcs.sync');
     const status = state && state.status;
+    const id = chrome.runtime.id;
+    const received = status && status.lastReceivedAt;
+    $('syncDiag').hidden = !current.cloudSync;
+    $('syncDiag').textContent = current.cloudSync
+      ? [
+          t('syncThisInstall', `${id.slice(0, 4)}…${id.slice(-4)}`, t(unpacked ? 'syncInstallUnpacked' : 'syncInstallStore')),
+          received ? t('syncLastReceived', new Date(received).toLocaleString(CMCS.locale(), { dateStyle: 'short', timeStyle: 'short' })) : t('syncNeverReceived'),
+        ].join(' · ')
+      : '';
+    $('syncDiag').title = id;
+    $('syncWarn').hidden = !current.cloudSync || !unpacked || fixedId;
+    $('syncWarn').textContent = t('syncIdWarning');
     if (!current.cloudSync || !status) {
       $('syncStatus').textContent = current.cloudSync ? t('syncNotYet') : '';
       return;

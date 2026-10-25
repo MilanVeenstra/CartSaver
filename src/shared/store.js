@@ -46,6 +46,8 @@
     thumbs: 'cmcs.thumbs',
     /** Graded (PSA) prices of Pokémon cards, by product (fetched by the background). */
     psa: 'cmcs.psa',
+    /** The last check whether saved articles are still for sale (progress, then the outcome). */
+    check: 'cmcs.check',
   };
 
   /** Saved lists; at this many, saving another is refused (never an old one dropped silently). */
@@ -310,6 +312,23 @@
     );
   }
 
+  /**
+   * What a check "still for sale?" looks at: saved articles out of the cart
+   * (the longest unchecked first), then favourites that are not saved articles.
+   */
+  function checkTargets(items, favorites, max = 30) {
+    const last = (a) => (a.lastCheck && a.lastCheck.at) || 0;
+    const saved = Object.values(items || {})
+      .filter((item) => item.status === STATUS.MISSING || item.status === STATUS.UNAVAILABLE)
+      .sort((a, b) => last(a) - last(b))
+      .map((article) => ({ kind: 'item', article }));
+    const favs = Object.values(favorites || {})
+      .filter((fav) => !(items || {})[fav.articleId])
+      .sort((a, b) => last(a) - last(b))
+      .map((article) => ({ kind: 'favorite', article }));
+    return [...saved, ...favs].slice(0, max);
+  }
+
   /** A stable signature of the missing set, used to remember a dismissed reminder. */
   function missingSignature(items, game) {
     return refillCandidates(items, { game })
@@ -545,6 +564,7 @@
     JOB_PENDING_TTL_MS,
 
     applyCartSnapshot,
+    checkTargets,
     notePrice,
     priceHistoryOf,
     PRICE_HISTORY_MAX,
@@ -586,6 +606,10 @@
     updateMeta: (fn) => update(KEYS.meta, {}, fn),
 
     getJob: () => get(KEYS.job, null),
+
+    getCheck: () => get(KEYS.check, null),
+    setCheck: (check) => set(KEYS.check, check),
+    updateCheck: (fn) => update(KEYS.check, null, fn),
     setJob: (job) => set(KEYS.job, job),
     updateJob: (fn) => update(KEYS.job, null, fn),
 

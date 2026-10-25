@@ -77,6 +77,60 @@
   "cartsUpdated": {
     "message": "“$1” bijgewerkt met je huidige lijst."
   },
+  "checkBackCount": {
+    "message": "$1 weer te koop"
+  },
+  "checkDone": {
+    "message": "$1 artikelen gecontroleerd."
+  },
+  "checkDoneOne": {
+    "message": "1 artikel gecontroleerd."
+  },
+  "checkError": {
+    "message": "Controleren gestopt: $1"
+  },
+  "checkForSale": {
+    "message": "$1 nog te koop"
+  },
+  "checkGone": {
+    "message": "Niet meer te vinden bij de controle: verkocht of offline gehaald."
+  },
+  "checkGoneCount": {
+    "message": "$1 niet meer te koop"
+  },
+  "checkNothing": {
+    "message": "Er is niets om te controleren: alles zit in je mandje."
+  },
+  "checkNow": {
+    "message": "Controleren of je artikelen nog te koop zijn"
+  },
+  "checkPriceUpCount": {
+    "message": "$1 duurder geworden"
+  },
+  "checkRunning": {
+    "message": "Controleren of je artikelen nog te koop zijn… $1 van $2"
+  },
+  "checkShort": {
+    "message": "Controleren"
+  },
+  "checkStopped": {
+    "message": "Controleren gestopt na $1 van $2."
+  },
+  "checkUnsureCount": {
+    "message": "$1 niet zeker"
+  },
+  "checkWaiting": {
+    "message": "Controleren begint zodra Cardmarket open is…"
+  },
+  "checkedForSale": {
+    "message": "Gecontroleerd op $1: nog te koop."
+  },
+  "checkedGone": {
+    "message": "Gecontroleerd op $1: niet meer te vinden."
+  },
+  "checkedUnsure": {
+    "message": "Gecontroleerd op $1: niet zeker (niet gevonden tussen de goedkopere aanbiedingen)."
+  },
   "clearAll": {
     "message": "Alles wissen"
   },
@@ -241,9 +295,6 @@
   },
   "favNotOnPageTitle": {
     "message": "Favoriet niet op deze pagina"
-  },
-  "favOpenOffer": {
-    "message": "Bekijk aanbieding op Cardmarket"
   },
   "favRemove": {
     "message": "Verwijder uit favorieten"
@@ -617,6 +668,9 @@
   "replaceMore": {
     "message": "$1 duurder"
   },
+  "replaceMoreOnCardmarket": {
+    "message": "Alle aanbiedingen op Cardmarket"
+  },
   "replaceNone": {
     "message": "Geen vergelijkbaar aanbod gevonden."
   },
@@ -646,12 +700,6 @@
   },
   "resultFavoritesFailed": {
     "message": "Favorieten die niet lukten: $1."
-  },
-  "retryOne": {
-    "message": "Opnieuw proberen"
-  },
-  "retryUnavailable": {
-    "message": "Opnieuw proberen"
   },
   "saveCartNow": {
     "message": "Mandje nu inlezen"
@@ -839,6 +887,21 @@
   "syncFull": {
     "message": "$1 nog alleen in deze browser: de sync is vol."
   },
+  "syncIdWarning": {
+    "message": "Let op: deze ZIP-versie heeft een eigen ID, dat afhangt van de map waarin hij staat. Je andere browsers zien deze gegevens alleen bij precies hetzelfde ID. Dat werkt met de versie uit de Chrome Web Store, of met een ZIP-versie met een vaste sleutel."
+  },
+  "syncInstallStore": {
+    "message": "Chrome Web Store"
+  },
+  "syncInstallUnpacked": {
+    "message": "ZIP-versie"
+  },
+  "syncLastReceived": {
+    "message": "laatst iets ontvangen van een andere browser: $1"
+  },
+  "syncNeverReceived": {
+    "message": "nog nooit iets ontvangen van een andere browser"
+  },
   "syncNotYet": {
     "message": "Nog niet gesynchroniseerd."
   },
@@ -847,6 +910,9 @@
   },
   "syncStatus": {
     "message": "Gesynchroniseerd: $1 · $2 KB van ongeveer 100 KB."
+  },
+  "syncThisInstall": {
+    "message": "Deze installatie: ID $1 ($2)"
   },
   "syncTitle": {
     "message": "Je andere browsers"
