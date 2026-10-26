@@ -2730,14 +2730,14 @@ describe('Cardmarket Cart Saver', () => {
     });
   });
 
-  it('the settings say why your other browsers may not see this one (a ZIP install without a fixed key)', async () => {
+  it('a ZIP install has the fixed key: the same ID as the Chrome Web Store, no warning', async () => {
     const options = await context.newPage();
     await options.goto(`chrome-extension://${extensionId}/src/options/options.html`);
     await waitFor(async () => /Deze installatie: ID .{4}….{4} \(ZIP-versie\)/.test(await options.locator('#syncDiag').innerText().catch(() => '')), 'diagnosis');
     assert.match(await options.locator('#syncDiag').innerText(), /ontvangen van een andere browser/);
     assert.equal(await options.locator('#syncDiag').getAttribute('title'), extensionId);
-    assert.ok(await options.locator('#syncWarn').isVisible(), 'the warning about the ID');
-    assert.match(await options.locator('#syncWarn').innerText(), /eigen ID/);
+    assert.equal(extensionId, 'eghdjmloidcaeghgchegmiodkkcljkfb', 'the Store ID, also unpacked');
+    assert.equal(await options.locator('#syncWarn').isVisible(), false, 'no warning about the ID');
     await options.close();
   });
 
